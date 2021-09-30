@@ -10,12 +10,21 @@ steps:
       - path: '/cache/.m2'
         name: 'm2_cache'
   - name: 'maven:3-jdk-8'
-    id: 'Setting version for Maven'
+    id: 'Build all hmftools'
+    entrypoint: mvn
+    args: [ 'clean', 'install', '-B' ]
+    volumes:
+      - path: '/cache/.m2'
+        name: 'm2_cache'
+    env:
+      - MAVEN_OPTS=-Dmaven.repo.local=/cache/.m2
+  - name: 'maven:3-jdk-8'
+    id: 'Setting version'
     dir: patient-db
     entrypoint: mvn
     args: ['versions:set', '-DnewVersion=3.62.${_PATCH_VERSION}']
-  - name: 'maven:3-jdk-11'
-    id: 'Generate and deploy client'
+  - name: 'maven:3-jdk-8'
+    id: 'Generate and deploy patient db jar'
     dir: patient-db
     entrypoint: mvn
     args: ['clean', 'deploy', '-B', '-P', 'shade']
