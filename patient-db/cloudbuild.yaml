@@ -1,0 +1,36 @@
+steps:
+  - name: 'gcr.io/cloud-builders/gsutil'
+    args:
+      - '-m'
+      - 'rsync'
+      - '-r'
+      - 'gs://hmf-build-caches/patient-db/.m2'
+      - '/cache/.m2'
+    volumes:
+      - path: '/cache/.m2'
+        name: 'm2_cache'
+  - name: 'maven:3-jdk-8'
+    id: 'Setting version for Maven'
+    dir: java_client
+    entrypoint: mvn
+    args: ['versions:set', '-DnewVersion=3.62.${_PATCH_VERSION}']
+  - name: 'maven:3-jdk-11'
+    id: 'Generate and deploy client'
+    dir: java_client
+    entrypoint: mvn
+    args: ['clean', 'deploy', '-B', '-P', 'shade']
+    volumes:
+      - path: '/cache/.m2'
+        name: 'm2_cache'
+    env:
+      - MAVEN_OPTS=-Dmaven.repo.local=/cache/.m2
+  - name: 'gcr.io/cloud-builders/gsutil'
+    args:
+      - '-m'
+      - 'rsync'
+      - '-r'
+      - '/cache/.m2'
+      - 'gs://hmf-build-caches/hmfapi-java-client/.m2/'
+    volumes:
+      - path: '/cache/.m2'
+        name: 'm2_cache'
