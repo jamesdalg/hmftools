@@ -11,12 +11,12 @@ steps:
         name: 'm2_cache'
   - name: 'maven:3-jdk-8'
     id: 'Setting version for Maven'
-    dir: java_client
+    dir: patient-db
     entrypoint: mvn
     args: ['versions:set', '-DnewVersion=3.62.${_PATCH_VERSION}']
   - name: 'maven:3-jdk-11'
     id: 'Generate and deploy client'
-    dir: java_client
+    dir: patient-db
     entrypoint: mvn
     args: ['clean', 'deploy', '-B', '-P', 'shade']
     volumes:
