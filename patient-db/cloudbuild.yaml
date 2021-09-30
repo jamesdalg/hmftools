@@ -9,7 +9,7 @@ steps:
     volumes:
       - path: '/cache/.m2'
         name: 'm2_cache'
-  - name: 'maven:3-jdk-8'
+  - name: 'eu.gcr.io/hmf-build/maven:3-jdk-8-mysql'
     id: 'Build all hmftools'
     entrypoint: mvn
     args: [ 'clean', 'install', '-B' ]
@@ -18,12 +18,12 @@ steps:
         name: 'm2_cache'
     env:
       - MAVEN_OPTS=-Dmaven.repo.local=/cache/.m2
-  - name: 'maven:3-jdk-8'
+  - name: 'eu.gcr.io/hmf-build/maven:3-jdk-8-mysql'
     id: 'Setting version'
     dir: patient-db
     entrypoint: mvn
     args: ['versions:set', '-DnewVersion=3.62.${_PATCH_VERSION}']
-  - name: 'maven:3-jdk-8'
+  - name: 'eu.gcr.io/hmf-build/maven:3-jdk-8-mysql'
     id: 'Generate and deploy patient db jar'
     dir: patient-db
     entrypoint: mvn
