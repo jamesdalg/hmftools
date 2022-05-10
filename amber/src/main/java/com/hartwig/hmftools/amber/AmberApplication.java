@@ -200,6 +200,9 @@ public class AmberApplication implements AutoCloseable
             case V38:
                 resourcePath = "tumorOnlyExcludedSnp.38.bed";
                 break;
+            case CHM13:
+                resourcePath = "tumorOnlyExcludedSnp.CHM13.bed";
+                break;
         }
 
         return AmberUtils.loadBedFromResource(resourcePath);

@@ -16,6 +16,7 @@ import org.jetbrains.annotations.NotNull;
 public enum RefGenomeCoordinates
 {
     COORDS_37(fromResource("lengths.37.tsv"), fromResource("centromeres.37.tsv")),
+    COORDS_CHM13(fromResource("lengths.CHM13.tsv"), fromResource("centromeres.CHM13.tsv")),
     COORDS_38(fromResource("lengths.38.tsv"), fromResource("centromeres.38.tsv"));
 
     public final Map<Chromosome,Integer> Lengths;

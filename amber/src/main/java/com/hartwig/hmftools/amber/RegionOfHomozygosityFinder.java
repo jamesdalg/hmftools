@@ -222,6 +222,9 @@ public class RegionOfHomozygosityFinder
             case V38:
                 resourcePath = "rohExcluded.38.bed";
                 break;
+            case CHM13:
+                resourcePath = "rohExcluded.CHM13.bed";
+                break;
         }
 
         List<GenomeRegion> excludedRegions = AmberUtils.loadBedFromResource(resourcePath);
@@ -236,6 +239,9 @@ public class RegionOfHomozygosityFinder
                 break;
             case V38:
                 refCcoord = RefGenomeCoordinates.COORDS_38;
+                break;
+            case CHM13:
+                refCcoord = RefGenomeCoordinates.COORDS_CHM13;
                 break;
             default:
                 refCcoord = RefGenomeCoordinates.COORDS_37;
