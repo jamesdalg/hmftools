@@ -1,10 +1,10 @@
 package com.hartwig.hmftools.patientdb.clinical.validators;
 
-import static com.hartwig.hmftools.patientdb.clinical.datamodel.TestDatamodelFactory.baselineBuilder;
-import static com.hartwig.hmftools.patientdb.clinical.datamodel.TestDatamodelFactory.biopsyBuilder;
-import static com.hartwig.hmftools.patientdb.clinical.datamodel.TestDatamodelFactory.biopsyTreatmentBuilder;
-import static com.hartwig.hmftools.patientdb.clinical.datamodel.TestDatamodelFactory.biopsyTreatmentResponseBuilder;
-import static com.hartwig.hmftools.patientdb.clinical.datamodel.TestDatamodelFactory.drugBuilder;
+import static com.hartwig.hmftools.patientdb.clinical.datamodel.ClinicalTestFactory.baselineBuilder;
+import static com.hartwig.hmftools.patientdb.clinical.datamodel.ClinicalTestFactory.biopsyBuilder;
+import static com.hartwig.hmftools.patientdb.clinical.datamodel.ClinicalTestFactory.biopsyTreatmentBuilder;
+import static com.hartwig.hmftools.patientdb.clinical.datamodel.ClinicalTestFactory.biopsyTreatmentResponseBuilder;
+import static com.hartwig.hmftools.patientdb.clinical.datamodel.ClinicalTestFactory.drugBuilder;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;

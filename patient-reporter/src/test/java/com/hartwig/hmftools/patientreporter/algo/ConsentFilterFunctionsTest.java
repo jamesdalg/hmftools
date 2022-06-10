@@ -19,7 +19,7 @@ import com.hartwig.hmftools.common.serve.actionability.EvidenceLevel;
 import com.hartwig.hmftools.common.variant.ImmutableReportableVariant;
 import com.hartwig.hmftools.common.variant.ReportableVariant;
 import com.hartwig.hmftools.common.variant.ReportableVariantSource;
-import com.hartwig.hmftools.common.variant.VariantTestFactory;
+import com.hartwig.hmftools.common.variant.ReportableVariantTestFactory;
 
 import org.apache.logging.log4j.util.Strings;
 import org.jetbrains.annotations.NotNull;
@@ -67,7 +67,7 @@ public class ConsentFilterFunctionsTest {
 
     @Test
     public void canFilterEvidenceForGermlineConsent() {
-        ProtectEvidence evidence = ProtectTestFactory.testEvidenceBuilder()
+        ProtectEvidence evidence = ProtectTestFactory.builder()
                 .event("HR deficiency")
                 .germline(true)
                 .reported(true)
@@ -75,8 +75,8 @@ public class ConsentFilterFunctionsTest {
                 .onLabel(true)
                 .level(EvidenceLevel.B)
                 .direction(EvidenceDirection.RESPONSIVE)
-                .protectSources(Sets.newHashSet(ImmutableProtectSource.builder()
-                        .source(Knowledgebase.ICLUSION)
+                .sources(Sets.newHashSet(ImmutableProtectSource.builder()
+                        .name(Knowledgebase.ICLUSION)
                         .sourceEvent(Strings.EMPTY)
                         .sourceUrls(Sets.newHashSet())
                         .evidenceType(ProtectEvidenceType.AMPLIFICATION)
@@ -95,6 +95,6 @@ public class ConsentFilterFunctionsTest {
 
     @NotNull
     private static ImmutableReportableVariant.Builder createTestReportableVariantBuilder() {
-        return ImmutableReportableVariant.builder().from(VariantTestFactory.createTestReportableVariant());
+        return ImmutableReportableVariant.builder().from(ReportableVariantTestFactory.create());
     }
 }

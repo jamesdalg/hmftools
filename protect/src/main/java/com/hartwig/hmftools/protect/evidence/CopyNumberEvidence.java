@@ -6,8 +6,8 @@ import java.util.stream.Collectors;
 import com.google.common.collect.Lists;
 import com.hartwig.hmftools.common.protect.ProtectEventGenerator;
 import com.hartwig.hmftools.common.protect.ProtectEvidence;
-import com.hartwig.hmftools.common.purple.copynumber.CopyNumberInterpretation;
-import com.hartwig.hmftools.common.purple.copynumber.ReportableGainLoss;
+import com.hartwig.hmftools.common.purple.interpretation.CopyNumberInterpretation;
+import com.hartwig.hmftools.common.purple.interpretation.GainLoss;
 import com.hartwig.hmftools.serve.actionability.gene.ActionableGene;
 import com.hartwig.hmftools.serve.extraction.gene.GeneLevelEvent;
 
@@ -25,19 +25,19 @@ public class CopyNumberEvidence {
         this.personalizedEvidenceFactory = personalizedEvidenceFactory;
         this.actionableGenes = actionableGenes.stream()
                 .filter(x -> x.event() == GeneLevelEvent.INACTIVATION || x.event() == GeneLevelEvent.AMPLIFICATION
-                        || x.event() == GeneLevelEvent.DELETION)
+                        || x.event() == GeneLevelEvent.OVER_EXPRESSION || x.event() == GeneLevelEvent.DELETION
+                        || x.event() == GeneLevelEvent.UNDER_EXPRESSION)
                 .collect(Collectors.toList());
     }
 
     @NotNull
-    public List<ProtectEvidence> evidence(@NotNull List<ReportableGainLoss> reportableGainsLosses,
-            @NotNull List<ReportableGainLoss> unreportedGainsLosses) {
+    public List<ProtectEvidence> evidence(@NotNull List<GainLoss> reportableGainsLosses, @NotNull List<GainLoss> unreportedGainsLosses) {
         List<ProtectEvidence> result = Lists.newArrayList();
-        for (ReportableGainLoss reportableGainLoss : reportableGainsLosses) {
+        for (GainLoss reportableGainLoss : reportableGainsLosses) {
             result.addAll(evidence(reportableGainLoss, true));
         }
 
-        for (ReportableGainLoss unreportedGainLoss : unreportedGainsLosses) {
+        for (GainLoss unreportedGainLoss : unreportedGainsLosses) {
             result.addAll(evidence(unreportedGainLoss, false));
         }
 
@@ -45,7 +45,7 @@ public class CopyNumberEvidence {
     }
 
     @NotNull
-    private List<ProtectEvidence> evidence(@NotNull ReportableGainLoss gainLoss, boolean report) {
+    private List<ProtectEvidence> evidence(@NotNull GainLoss gainLoss, boolean report) {
         List<ProtectEvidence> result = Lists.newArrayList();
         for (ActionableGene actionable : actionableGenes) {
             if (actionable.gene().equals(gainLoss.gene()) && isTypeMatch(actionable, gainLoss)) {
@@ -55,7 +55,7 @@ public class CopyNumberEvidence {
                         .transcript(gainLoss.transcript())
                         .isCanonical(gainLoss.isCanonical())
                         .event(ProtectEventGenerator.copyNumberEvent(gainLoss))
-                        .eventIsHighDriver(EvidenceDriverLikelihood.interpretCNV())
+                        .eventIsHighDriver(EvidenceDriverLikelihood.interpretCopyNumber())
                         .build();
                 result.add(evidence);
             }
@@ -64,13 +64,15 @@ public class CopyNumberEvidence {
         return result;
     }
 
-    private static boolean isTypeMatch(@NotNull ActionableGene actionable, @NotNull ReportableGainLoss reportable) {
+    private static boolean isTypeMatch(@NotNull ActionableGene actionable, @NotNull GainLoss reportable) {
         switch (actionable.event()) {
             case AMPLIFICATION:
+            case OVER_EXPRESSION:
                 return reportable.interpretation() == CopyNumberInterpretation.FULL_GAIN
                         || reportable.interpretation() == CopyNumberInterpretation.PARTIAL_GAIN;
             case INACTIVATION:
             case DELETION:
+            case UNDER_EXPRESSION:
                 return reportable.interpretation() == CopyNumberInterpretation.FULL_LOSS
                         || reportable.interpretation() == CopyNumberInterpretation.PARTIAL_LOSS;
             default:

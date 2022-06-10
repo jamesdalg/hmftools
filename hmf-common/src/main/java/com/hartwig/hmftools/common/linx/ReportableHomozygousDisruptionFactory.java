@@ -2,16 +2,10 @@ package com.hartwig.hmftools.common.linx;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import com.hartwig.hmftools.common.drivercatalog.DriverCatalog;
 import com.hartwig.hmftools.common.drivercatalog.DriverCatalogFile;
-import com.hartwig.hmftools.common.drivercatalog.DriverCatalogKey;
-import com.hartwig.hmftools.common.drivercatalog.DriverCatalogMap;
 import com.hartwig.hmftools.common.drivercatalog.DriverType;
 
 import org.apache.logging.log4j.LogManager;
@@ -37,19 +31,12 @@ public final class ReportableHomozygousDisruptionFactory {
     }
 
     @NotNull
-    private static List<ReportableHomozygousDisruption> extractHomozygousDisruptions(@NotNull List<DriverCatalog> linxDriversCatalog) {
+    private static List<ReportableHomozygousDisruption> extractHomozygousDisruptions(@NotNull List<DriverCatalog> driverCatalog) {
         List<ReportableHomozygousDisruption> homozygousDisruptions = Lists.newArrayList();
-        Set<DriverCatalogKey> keys = DriverCatalogKey.buildUniqueKeysSet(linxDriversCatalog);
-        Map<DriverCatalogKey, DriverCatalog> geneDriverMap = DriverCatalogMap.toDriverMap(linxDriversCatalog);
 
-        for (DriverCatalogKey key : keys) {
-            DriverCatalog geneDriver = geneDriverMap.get(key);
-            if (geneDriver == null) {
-                throw new IllegalStateException(
-                        "Could not find driver entry for homozygous disruption on gene '" + geneDriver.gene() + "'");
-            }
-            if (geneDriver.driver() == DriverType.HOM_DUP_DISRUPTION || geneDriver.driver() == DriverType.HOM_DEL_DISRUPTION) {
-                homozygousDisruptions.add(create(geneDriver));
+        for (DriverCatalog driver : driverCatalog) {
+            if (driver.driver() == DriverType.HOM_DUP_DISRUPTION || driver.driver() == DriverType.HOM_DEL_DISRUPTION) {
+                homozygousDisruptions.add(create(driver));
             }
         }
 
@@ -58,7 +45,6 @@ public final class ReportableHomozygousDisruptionFactory {
 
     @NotNull
     private static ReportableHomozygousDisruption create(@NotNull DriverCatalog driverCatalog) {
-
         return ImmutableReportableHomozygousDisruption.builder()
                 .chromosome(driverCatalog.chromosome())
                 .chromosomeBand(driverCatalog.chromosomeBand())

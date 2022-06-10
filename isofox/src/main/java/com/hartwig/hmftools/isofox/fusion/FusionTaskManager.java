@@ -1,15 +1,12 @@
 package com.hartwig.hmftools.isofox.fusion;
 
 import static com.hartwig.hmftools.isofox.IsofoxConfig.ISF_LOGGER;
-import static com.hartwig.hmftools.isofox.IsofoxFunction.FUSIONS;
 import static com.hartwig.hmftools.isofox.fusion.FusionReadGroup.mergeChimericReadMaps;
-import static com.hartwig.hmftools.isofox.fusion.FusionUtils.formChromosomePair;
 import static com.hartwig.hmftools.isofox.fusion.HardFilteredCache.removePartialGroupsWithHardFilteredMatch;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -26,6 +23,7 @@ public class FusionTaskManager
 
     private final RacFragmentCache mRacFragmentCache;
     private final HardFilteredCache mHardFilteredCache;
+    private int mHardFilteredFusionCount;
     private final Map<String,Map<String,FusionReadGroup>> mIncompleteReadGroups; // keyed by chromosome then readId
 
     public FusionTaskManager(final IsofoxConfig config, final EnsemblDataCache geneTransCache)
@@ -33,14 +31,15 @@ public class FusionTaskManager
         mConfig = config;
         mGeneTransCache = geneTransCache;
 
-        if(mConfig.runFunction(FUSIONS))
-            mGeneTransCache.createTranscriptIdMap();
-
         mPassingFusions = new PassingFusions(config.Fusions.KnownFusions, config.Fusions.CohortFile);
 
         mRacFragmentCache = new RacFragmentCache();
         mIncompleteReadGroups = Maps.newHashMap();
         mHardFilteredCache = new HardFilteredCache();
+
+        mGeneTransCache.createTranscriptIdMap();
+        mHardFilteredCache.registerKnownSpliteSites(mGeneTransCache);
+        mHardFilteredFusionCount = 0;
 
         mFusionWriter = new FusionWriter(mConfig);
     }
@@ -125,13 +124,16 @@ public class FusionTaskManager
         mRacFragmentCache.addRacFragments(chromosome, geneCollectionId, racFragments);
     }
 
+    public synchronized void addHardFilteredFusionCount(int count) { mHardFilteredFusionCount += count; }
+
     public void close()
     {
         int incompleteGroupCount = mIncompleteReadGroups.values().stream().mapToInt(x -> x.size()).sum();
+        int totalHardFiltered = mHardFilteredFusionCount + mHardFilteredCache.hardFilteredCount();
 
-        ISF_LOGGER.info("all fusion tasks complete - RAC frags({} assigned={} groups={}) incompleteGroups({})",
-                mRacFragmentCache.totalFragmentCount(), mRacFragmentCache.assignedFragmentCount(),
-                mRacFragmentCache.totalGroupCount(), incompleteGroupCount);
+        ISF_LOGGER.info("all fusion tasks complete: incompleteGroups({}) RAC frags({} assigned={} groups={}) hardFiltered({} supps={})",
+                incompleteGroupCount, mRacFragmentCache.totalFragmentCount(), mRacFragmentCache.assignedFragmentCount(),
+                mRacFragmentCache.totalGroupCount(), totalHardFiltered, mHardFilteredCache.hardFilteredCount());
 
         // write any unassigned RAC fragments
         if(mConfig.Fusions.WriteChimericReads || mConfig.Fusions.WriteChimericFragments)

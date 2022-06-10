@@ -1,29 +1,21 @@
 package com.hartwig.hmftools.cup.somatics;
 
-import static com.hartwig.hmftools.common.sigs.SnvSigUtils.contextFromVariant;
 import static com.hartwig.hmftools.common.sigs.SnvSigUtils.variantContext;
-import static com.hartwig.hmftools.common.utils.FileWriterUtils.createBufferedWriter;
 import static com.hartwig.hmftools.common.utils.VectorUtils.sumVector;
 import static com.hartwig.hmftools.cup.CuppaConfig.CUP_LOGGER;
 import static com.hartwig.hmftools.cup.common.CupConstants.AID_APOBEC_TRINUCLEOTIDE_CONTEXTS;
-import static com.hartwig.hmftools.cup.common.CupConstants.CANCER_TYPE_OTHER;
 import static com.hartwig.hmftools.cup.somatics.AidApobecStatus.ALL;
 import static com.hartwig.hmftools.cup.somatics.AidApobecStatus.FALSE_ONLY;
 import static com.hartwig.hmftools.cup.somatics.AidApobecStatus.TRUE_ONLY;
-import static com.hartwig.hmftools.cup.somatics.CopyNumberProfile.normaliseGenPosCountsByCopyNumber;
 
-import java.io.BufferedWriter;
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
-import com.google.common.collect.Maps;
+import com.hartwig.hmftools.common.genome.chromosome.HumanChromosome;
 import com.hartwig.hmftools.common.sigs.PositionFrequencies;
 import com.hartwig.hmftools.common.utils.Matrix;
 import com.hartwig.hmftools.common.variant.VariantType;
 import com.hartwig.hmftools.cup.common.SampleData;
-import com.hartwig.hmftools.cup.traits.SampleTraitsData;
 
 public final class GenomicPositions
 {
@@ -70,95 +62,96 @@ public final class GenomicPositions
         posFrequencies.clear();
         extractPositionFrequencyCounts(variants, posFrequencies, aidApobecStatus);
 
-        final Matrix matrix = new Matrix(posFrequencies.getCounts().length, 1);
+        final Matrix matrix = new Matrix(1, posFrequencies.getCounts().length);
 
-        matrix.setCol(0, posFrequencies.getCounts());
+        matrix.setRow(0, posFrequencies.getCounts());
         samplePosFreqIndex.put(sampleId, 0);
 
         return matrix;
     }
 
-    public static void buildCancerPosFrequencies(
-            final PositionFrequencies posFrequencies, final Matrix posFreqCounts, final Map<String,Integer> sampleIndexMap,
-            final Matrix cnProfiles, final Map<String, SampleTraitsData> refSampleTraitsData,
-            final Map<String,List<SampleData>> refCancerSampleData, final String filename)
+    public static void excludeChromosome(final Matrix matrix, final PositionFrequencies posFrequencies, final String chromosome)
     {
-        if(posFreqCounts == null)
-            return;
+        int chromosomeStartIndex = posFrequencies.getBucketIndex(chromosome, 0);
 
-        try
+        String nextChromosome = "";
+        for(int i = 0; i < HumanChromosome.values().length; ++i)
         {
-            BufferedWriter writer = createBufferedWriter(filename, false);
-
-            int maxSampleCount = posFrequencies.getMaxSampleCount();
-            int bucketCount = posFrequencies.getBucketCount();
-
-            final Map<String,double[]> cancerPosCounts = Maps.newHashMap();
-
-            for(Map.Entry<String,List<SampleData>> entry : refCancerSampleData.entrySet())
+            if(HumanChromosome.values()[i].toString().equals(chromosome))
             {
-                final String cancerType = entry.getKey();
+                if(i < HumanChromosome.values().length - 1)
+                    nextChromosome = HumanChromosome.values()[i + 1].toString();
 
-                if(cancerType.equals(CANCER_TYPE_OTHER))
-                    continue;
-
-                final double[] cancerCounts = new double[bucketCount];
-
-                for(final SampleData sample : entry.getValue())
-                {
-                    int sampleIndex = sampleIndexMap.get(sample.Id);
-                    double[] sampleCounts = posFreqCounts.getCol(sampleIndex);
-
-                    if(sampleCounts == null)
-                        continue;
-
-                    if(cnProfiles != null && refSampleTraitsData.containsKey(sample.Id))
-                    {
-                        double samplePloidy = refSampleTraitsData.get(sample.Id).Ploidy;
-                        final double[] sampleCnProfile = cnProfiles.getCol(sampleIndex);
-                        sampleCounts = normaliseGenPosCountsByCopyNumber(samplePloidy, sampleCounts, sampleCnProfile);
-                    }
-
-                    double sampleTotal = sumVector(sampleCounts);
-
-                    double reductionFactor = sampleTotal > maxSampleCount ? maxSampleCount / sampleTotal : 1.0;
-
-                    for(int b = 0; b < sampleCounts.length; ++b)
-                    {
-                        cancerCounts[b] += reductionFactor * sampleCounts[b];
-                    }
-                }
-
-                cancerPosCounts.put(cancerType, cancerCounts);
+                break;
             }
-
-            final List<String> cancerTypes = cancerPosCounts.keySet().stream().collect(Collectors.toList());
-            writer.write(cancerTypes.get(0));
-            for(int i = 1; i < cancerTypes.size(); ++i)
-            {
-                writer.write(String.format(",%s", cancerTypes.get(i)));
-            }
-
-            writer.newLine();
-
-            for(int b = 0; b < bucketCount; ++b)
-            {
-                writer.write(String.format("%.1f", cancerPosCounts.get(cancerTypes.get(0))[b]));
-
-                for(int i = 1; i < cancerTypes.size(); ++i)
-                {
-                    writer.write(String.format(",%.1f", cancerPosCounts.get(cancerTypes.get(i))[b]));
-                }
-
-                writer.newLine();
-            }
-
-            writer.close();
         }
-        catch(IOException e)
+
+        int chromosomeEndIndex;
+
+        if(!nextChromosome.isEmpty())
         {
-            CUP_LOGGER.error("failed to write sample pos data output: {}", e.toString());
+            chromosomeEndIndex = posFrequencies.getBucketIndex(nextChromosome, 0) - 1;
+        }
+        else
+        {
+            chromosomeEndIndex = posFrequencies.getBucketCount() - 1;
+        }
+
+        final double[][] data = matrix.getData();
+
+        for(int b = chromosomeStartIndex; b <= chromosomeEndIndex; ++b)
+        {
+            for(int i = 0; i < matrix.Rows; ++i)
+            {
+                data[i][b] = 0;
+            }
         }
     }
 
+    public static Matrix buildCancerMatrix(
+            final Matrix samplePosFreqCounts, final Map<String,Integer> sampleIndexMap,
+            final List<String> cancerTypes, final Map<String,List<SampleData>> refCancerSampleData, int maxSampleCount)
+    {
+        // positions in the columns as per the sample matrix
+        Matrix cancerGenPosMatrix = new Matrix(cancerTypes.size(), samplePosFreqCounts.Cols);
+        final double[][] matrixData = cancerGenPosMatrix.getData();
+
+        for(int i = 0; i < cancerTypes.size(); ++i)
+        {
+            String cancerType = cancerTypes.get(i);
+            List<SampleData> samples = refCancerSampleData.get(cancerType);
+
+            if(samples == null)
+            {
+                CUP_LOGGER.error("cancerType({}) missing ref samples", cancerType);
+                return null;
+            }
+
+            for(final SampleData sample : samples)
+            {
+                if(!sampleIndexMap.containsKey(sample.Id))
+                {
+                    CUP_LOGGER.error("gen-pos sample index missing sample({})", sample.Id);
+                    return null;
+                }
+
+                int sampleIndex = sampleIndexMap.get(sample.Id);
+                double[] sampleCounts = samplePosFreqCounts.getRow(sampleIndex);
+
+                if(sampleCounts == null)
+                    continue;
+
+                double sampleTotal = sumVector(sampleCounts);
+
+                double reductionFactor = sampleTotal > maxSampleCount ? maxSampleCount / sampleTotal : 1.0;
+
+                for(int b = 0; b < sampleCounts.length; ++b)
+                {
+                    matrixData[i][b] += reductionFactor * sampleCounts[b];
+                }
+            }
+        }
+
+        return cancerGenPosMatrix;
+    }
 }

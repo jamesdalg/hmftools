@@ -2,25 +2,28 @@ package com.hartwig.hmftools.orange.report.chapters;
 
 import java.util.List;
 
-import com.hartwig.hmftools.common.purple.copynumber.ReportableGainLoss;
+import com.hartwig.hmftools.common.purple.gene.GeneCopyNumber;
+import com.hartwig.hmftools.common.purple.interpretation.GainLoss;
 import com.hartwig.hmftools.common.sv.linx.LinxFusion;
 import com.hartwig.hmftools.common.variant.ReportableVariant;
 import com.hartwig.hmftools.common.variant.ReportableVariantFactory;
 import com.hartwig.hmftools.orange.algo.OrangeReport;
 import com.hartwig.hmftools.orange.algo.selection.CopyNumberSelector;
 import com.hartwig.hmftools.orange.algo.selection.FusionSelector;
+import com.hartwig.hmftools.orange.algo.selection.LossOfHeterozygositySelector;
 import com.hartwig.hmftools.orange.algo.selection.SomaticVariantSelector;
 import com.hartwig.hmftools.orange.report.ReportConfig;
 import com.hartwig.hmftools.orange.report.ReportResources;
-import com.hartwig.hmftools.orange.report.tables.FusionTable;
+import com.hartwig.hmftools.orange.report.tables.DNAFusionTable;
 import com.hartwig.hmftools.orange.report.tables.GeneCopyNumberTable;
 import com.hartwig.hmftools.orange.report.tables.GeneDisruptionTable;
 import com.hartwig.hmftools.orange.report.tables.HomozygousDisruptionTable;
+import com.hartwig.hmftools.orange.report.tables.LossOfHeterozygosityTable;
 import com.hartwig.hmftools.orange.report.tables.SomaticVariantTable;
 import com.hartwig.hmftools.orange.report.tables.StructuralDriverTable;
 import com.hartwig.hmftools.orange.report.tables.ViralPresenceTable;
-import com.hartwig.hmftools.orange.report.util.CellUtil;
-import com.hartwig.hmftools.orange.report.util.ImageUtil;
+import com.hartwig.hmftools.orange.report.util.Cells;
+import com.hartwig.hmftools.orange.report.util.Images;
 import com.itextpdf.kernel.geom.PageSize;
 import com.itextpdf.layout.Document;
 import com.itextpdf.layout.element.Image;
@@ -66,6 +69,7 @@ public class SomaticFindingsChapter implements ReportChapter {
         addViralPresence(document);
         addHomozygousDisruptions(document);
         addGeneDisruptions(document);
+        addLossOfHeterozygosity(document);
         addStructuralDrivers(document);
         addStructuralDriverPlots(document);
     }
@@ -91,7 +95,7 @@ public class SomaticFindingsChapter implements ReportChapter {
     private void addKataegisPlot(@NotNull Document document) {
         document.add(new Paragraph("Kataegis plot").addStyle(ReportResources.tableTitleStyle()));
         if (report.plots().purpleKataegisPlot() != null) {
-            Image image = ImageUtil.build(report.plots().purpleKataegisPlot());
+            Image image = Images.build(report.plots().purpleKataegisPlot());
             image.setMaxWidth(contentWidth());
             image.setHorizontalAlignment(HorizontalAlignment.CENTER);
             document.add(image);
@@ -101,26 +105,29 @@ public class SomaticFindingsChapter implements ReportChapter {
     }
 
     private void addSomaticAmpDels(@NotNull Document document) {
-        String titleDrivers = "Driver amps/dels (" + report.purple().reportableGainsLosses().size() + ")";
-        document.add(GeneCopyNumberTable.build(titleDrivers, contentWidth(), report.purple().reportableGainsLosses()));
+        String titleDrivers = "Driver amps/dels (" + report.purple().reportableSomaticGainsLosses().size() + ")";
+        document.add(GeneCopyNumberTable.build(titleDrivers,
+                contentWidth(),
+                report.purple().reportableSomaticGainsLosses(),
+                report.isofox()));
 
-        List<ReportableGainLoss> gains = CopyNumberSelector.selectNonDriverGains(report.purple().unreportedGainsLosses());
+        List<GainLoss> gains = CopyNumberSelector.selectNonDriverGains(report.purple().unreportedSomaticGainsLosses());
         String titleGains = "Other regions with amps (" + gains.size() + ")";
-        document.add(GeneCopyNumberTable.build(titleGains, contentWidth(), max10(gains)));
+        document.add(GeneCopyNumberTable.build(titleGains, contentWidth(), max10(gains), report.isofox()));
 
-        List<ReportableGainLoss> losses =
-                CopyNumberSelector.selectNonDriverLosses(report.purple().unreportedGainsLosses(), report.purple().reportableGainsLosses());
+        List<GainLoss> losses = CopyNumberSelector.selectNonDriverLosses(report.purple().unreportedSomaticGainsLosses(),
+                report.purple().reportableSomaticGainsLosses());
         String titleLosses = "Regions with deletions in genes in other autosomal regions (" + losses.size() + ")";
-        document.add(GeneCopyNumberTable.build(titleLosses, contentWidth(), max10(losses)));
+        document.add(GeneCopyNumberTable.build(titleLosses, contentWidth(), max10(losses), report.isofox()));
     }
 
     private void addFusions(@NotNull Document document) {
         String titleDrivers = "Driver fusions (" + report.linx().reportableFusions().size() + ")";
-        document.add(FusionTable.build(titleDrivers, contentWidth(), report.linx().reportableFusions()));
+        document.add(DNAFusionTable.build(titleDrivers, contentWidth(), report.linx().reportableFusions(), report.isofox()));
 
         List<LinxFusion> nonDriverFusions = FusionSelector.selectNonDriverFusions(report.linx().unreportedFusions(), report.protect());
         String titleNonDrivers = "Other potentially interesting fusions (" + nonDriverFusions.size() + ")";
-        document.add(FusionTable.build(titleNonDrivers, contentWidth(), max10(nonDriverFusions)));
+        document.add(DNAFusionTable.build(titleNonDrivers, contentWidth(), max10(nonDriverFusions), report.isofox()));
     }
 
     private void addViralPresence(@NotNull Document document) {
@@ -132,18 +139,26 @@ public class SomaticFindingsChapter implements ReportChapter {
     }
 
     private void addHomozygousDisruptions(@NotNull Document document) {
-        String titleDrivers = "Homozygous disruptions (" + report.linx().homozygousDisruptions().size() + ")";
-        document.add(HomozygousDisruptionTable.build(titleDrivers, contentWidth(), report.linx().homozygousDisruptions()));
+        String title = "Homozygous disruptions (" + report.linx().homozygousDisruptions().size() + ")";
+        document.add(HomozygousDisruptionTable.build(title, contentWidth(), report.linx().homozygousDisruptions()));
     }
 
     private void addGeneDisruptions(@NotNull Document document) {
-        String titleDrivers = "Gene disruptions (" + report.linx().geneDisruptions().size() + ")";
-        document.add(GeneDisruptionTable.build(titleDrivers, contentWidth(), report.linx().geneDisruptions()));
+        String title = "Gene disruptions (" + report.linx().geneDisruptions().size() + ")";
+        document.add(GeneDisruptionTable.build(title, contentWidth(), report.linx().geneDisruptions()));
+    }
+
+    private void addLossOfHeterozygosity(@NotNull Document document) {
+        List<GeneCopyNumber> reportableLOHGenes = LossOfHeterozygositySelector.selectHRDOrMSIGenes(report.purple().lohGenes(),
+                report.purple().microsatelliteStatus(),
+                report.chord().hrStatus());
+        String title = "Potentially interesting LOH events in case of MSI or HRD (" + reportableLOHGenes.size() + ")";
+        document.add(LossOfHeterozygosityTable.build(title, contentWidth(), reportableLOHGenes));
     }
 
     private void addStructuralDrivers(final Document document) {
-        String titleDrivers = "Structural drivers (" + report.linx().drivers().size() + ")";
-        document.add(StructuralDriverTable.build(titleDrivers, contentWidth(), report.linx().drivers()));
+        String title = "Structural drivers (" + report.linx().drivers().size() + ")";
+        document.add(StructuralDriverTable.build(title, contentWidth(), report.linx().drivers()));
     }
 
     private void addStructuralDriverPlots(@NotNull Document document) {
@@ -151,14 +166,14 @@ public class SomaticFindingsChapter implements ReportChapter {
         document.add(new Paragraph(title).addStyle(ReportResources.tableTitleStyle()));
         Table table = new Table(2);
         for (String plot : report.plots().linxDriverPlots()) {
-            Image image = ImageUtil.build(plot);
+            Image image = Images.build(plot);
             image.setMaxWidth(Math.round(contentWidth() / 2D) - 2);
             image.setHorizontalAlignment(HorizontalAlignment.CENTER);
-            table.addCell(CellUtil.createImage(image));
+            table.addCell(Cells.createImage(image));
         }
 
         if (report.plots().linxDriverPlots().size() % 2 == 1) {
-            table.addCell(CellUtil.createContent(Strings.EMPTY));
+            table.addCell(Cells.createContent(Strings.EMPTY));
         }
 
         document.add(table);

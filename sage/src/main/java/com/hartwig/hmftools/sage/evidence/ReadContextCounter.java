@@ -1,9 +1,8 @@
 package com.hartwig.hmftools.sage.evidence;
 
 import static java.lang.Math.max;
-import static java.lang.Math.min;
-import static java.lang.Math.round;
 
+import static com.hartwig.hmftools.sage.SageConstants.CORE_LOW_QUAL_MISMATCH_BASE_LENGTH;
 import static com.hartwig.hmftools.sage.SageConstants.DEFAULT_EVIDENCE_MAP_QUAL;
 import static com.hartwig.hmftools.sage.SageConstants.SC_READ_EVENTS_FACTOR;
 import static com.hartwig.hmftools.sage.evidence.ReadMatchType.NO_SUPPORT;
@@ -33,7 +32,6 @@ import htsjdk.samtools.SAMRecord;
 public class ReadContextCounter implements VariantHotspot
 {
     public final VariantTier Tier;
-    public final boolean Realign;
     public final int MaxCoverage;
 
     private final int mId;
@@ -42,7 +40,6 @@ public class ReadContextCounter implements VariantHotspot
     private final ReadContext mReadContext;
     private final int mMinNumberOfEvents;
     private final boolean mIsMnv;
-    private final boolean mIsIndel;
 
     private final int[] mQualities;
     private final int[] mCounts;
@@ -63,6 +60,8 @@ public class ReadContextCounter implements VariantHotspot
     private int mRawAltBaseQuality;
     private int mRawRefBaseQuality;
 
+    private int mSoftClipInsertSupport;
+
     private List<Integer> mLocalPhaseSets;
     private List<int[]> mLpsCounts;
 
@@ -77,19 +76,17 @@ public class ReadContextCounter implements VariantHotspot
 
     public ReadContextCounter(
             final int id, final VariantHotspot variant, final ReadContext readContext, final VariantTier tier,
-            final int maxCoverage, final int minNumberOfEvents, boolean realign)
+            final int maxCoverage, final int minNumberOfEvents)
     {
         mId = id;
 
         Tier = tier;
-        Realign = realign;
         MaxCoverage = maxCoverage;
         mMinNumberOfEvents = minNumberOfEvents;
 
         mReadContext = readContext;
         mVariant = variant;
         mIsMnv = variant.isMNV();
-        mIsIndel = variant.isIndel();
 
         mQualities = new int[RC_MAX];
         mCounts = new int[RC_MAX];
@@ -109,6 +106,7 @@ public class ReadContextCounter implements VariantHotspot
         mRawRefSupport = 0;
         mRawAltBaseQuality = 0;
         mRawRefBaseQuality = 0;
+        mSoftClipInsertSupport = 0;
 
         mLocalPhaseSets = null;
         mLpsCounts = null;
@@ -172,6 +170,7 @@ public class ReadContextCounter implements VariantHotspot
     public int rawRefSupport() { return mRawRefSupport; }
     public int rawAltBaseQuality() { return mRawAltBaseQuality; }
     public int rawRefBaseQuality() { return mRawRefBaseQuality; }
+    public int softClipInsertSupport() { return mSoftClipInsertSupport; }
 
     public void addLocalPhaseSet(int lps, int readCount, double allocCount)
     {
@@ -231,6 +230,9 @@ public class ReadContextCounter implements VariantHotspot
         mRawAltBaseQuality += rawContext.AltQuality;
         mRawRefBaseQuality += rawContext.RefQuality;
 
+        if(rawContext.ReadIndexInSoftClip && rawContext.AltSupport)
+            ++mSoftClipInsertSupport;
+
         if(readIndex < 0)
             return UNRELATED;
 
@@ -261,14 +263,15 @@ public class ReadContextCounter implements VariantHotspot
         {
             boolean wildcardMatchInCore = mVariant.isSNV() && mReadContext.microhomology().isEmpty();
 
+            int maxCoreMismatches = mVariant.isIndel() && mVariant.alt().length() >= CORE_LOW_QUAL_MISMATCH_BASE_LENGTH ?
+                    mVariant.alt().length() / CORE_LOW_QUAL_MISMATCH_BASE_LENGTH : 0;
+
             IndexedBases readBases = record.getCigar().containsOperator(CigarOperator.N) ?
                     ExpandedBasesFactory.expand(position(), readIndex, record) :
                     new IndexedBases(position(), readIndex, record.getReadBases());
 
-            int nonIndelLength = mIsIndel ? 0 : alt().length();
-
             final ReadContextMatch match = mReadContext.indexedBases().matchAtPosition(
-                    readBases, wildcardMatchInCore, record.getBaseQualities(), nonIndelLength);
+                    readBases, record.getBaseQualities(), wildcardMatchInCore, maxCoreMismatches);
 
             if(!match.equals(ReadContextMatch.NONE))
             {
@@ -299,10 +302,10 @@ public class ReadContextCounter implements VariantHotspot
             }
         }
 
-        // Check if REALIGNED
-        final RealignedContext realignment = realignmentContext(Realign, readIndex, record);
-        final RealignedType realignmentType = realignment.Type;
-        if(realignmentType.equals(RealignedType.EXACT))
+        final RealignedContext realignment = realignmentContext(readIndex, record);
+        RealignedType realignedType = realignment != null ? realignment.Type : RealignedType.NONE;
+
+        if(realignedType == RealignedType.EXACT)
         {
             mCounts[RC_REALIGNED]++;
             mQualities[RC_REALIGNED] += quality;
@@ -312,10 +315,8 @@ public class ReadContextCounter implements VariantHotspot
             return SUPPORT;
         }
 
-        if(realignmentType.equals(RealignedType.NONE) && rawContext.ReadIndexInSoftClip)
-        {
+        if(realignedType == RealignedType.NONE && rawContext.ReadIndexInSoftClip && !rawContext.AltSupport)
             return UNRELATED;
-        }
 
         ReadMatchType matchType = UNRELATED;
 
@@ -336,7 +337,7 @@ public class ReadContextCounter implements VariantHotspot
         }
 
         // Jitter Penalty
-        switch(realignmentType)
+        switch(realignedType)
         {
             case LENGTHENED:
                 mJitterPenalty += jitterPenalty(qualityConfig, realignment.RepeatCount);
@@ -359,11 +360,8 @@ public class ReadContextCounter implements VariantHotspot
             mReverseStrand++;
     }
 
-    private RealignedContext realignmentContext(boolean realign, int readIndex, SAMRecord record)
+    private RealignedContext realignmentContext(int readIndex, SAMRecord record)
     {
-        if(!realign)
-            return new RealignedContext(RealignedType.NONE, 0);
-
         int index = mReadContext.readBasesPositionIndex();
         int leftIndex = mReadContext.readBasesLeftCentreIndex();
         int rightIndex = mReadContext.readBasesRightCentreIndex();

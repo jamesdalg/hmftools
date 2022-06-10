@@ -33,18 +33,18 @@ All values are optional unless otherwise specified.
 
 Argument | Description
 ---|---
--sample  | Required: Specific sample ID
--sv_vcf | Full path and filename for the SV VCF
--purple_dir | Directory with sample data for structural variant VCF, copy number and purity data files as written by GRIDSS and Purple.
--output_dir | Required: directory where all output files are written
--ref_genome_version | Defaults to version 37, valid values are 37 or 38 
--check_drivers | Run driver annotation logic
--driver_gene_panel | A panel of driver genes to annotate, matching the format in the DriverGenePanel.tsv resource file from the HMFTools resources
--check_fusions | Discover and annotate gene fusions
--known_fusion_file | known_fusion_data.csv 
--fragile_site_file | List of known fragile sites  {Chromosome,PosStart,PosEnd}
--line_element_file | List of known LINE source regions {Chromosome,PosStart,PosEnd}
--ensembl_data_dir | Directory for Ensembl reference files
+sample  | Required: Specific sample ID
+sv_vcf | Full path and filename for the SV VCF
+purple_dir | Directory with sample data for structural variant VCF, copy number and purity data files as written by GRIDSS and Purple.
+output_dir | Required: directory where all output files are written
+ref_genome_version | Defaults to version 37, valid values are 37 or 38 
+check_drivers | Run driver annotation logic
+driver_gene_panel | A panel of driver genes to annotate, matching the format in the DriverGenePanel.tsv resource file from the HMFTools resources
+check_fusions | Discover and annotate gene fusions
+known_fusion_file | known_fusion_data.csv 
+fragile_site_file | List of known fragile sites  {Chromosome,PosStart,PosEnd}
+line_element_file | List of known LINE source regions {Chromosome,PosStart,PosEnd}
+ensembl_data_dir | Directory for Ensembl reference files
 
 Reference files are available for ref genome 19/37 and 38 [HMFTools-Resources](https://resources.hartwigmedicalfoundation.nl/):
 - GenePanel: HMF driver genes
@@ -75,14 +75,15 @@ java -jar linx.jar
 ### Optional additional parameters
 Argument  | Description
 ---|---
--proximity_distance | minimum distance to cluster SVs (default = 5000)
--chaining_sv_limit | threshold for # SVs in clusters to skip chaining routine (default = 2000)
--log_reportable_fusion | only log reportable fusions
--fusion_gene_distance | distance upstream of gene to consider a breakend applicable (default = 100K)
--restricted_fusion_genes | restrict fusion search to specified genes, separated by ';'
--write_vis_data | write output to for generation of Circos clustering and chaining plots
--write_all_vis_fusions | Write visualiser data for all fusions including non-reportable 
--log_debug | logs in debug mode
+proximity_distance | minimum distance to cluster SVs (default = 5000)
+chaining_sv_limit | threshold for # SVs in clusters to skip chaining routine (default = 0, ie no limit)
+write_vis_data | write output to for generation of Circos clustering and chaining plots
+write_all_vis_fusions | Write visualiser data for all fusions including non-reportable 
+annotations | Multi-sample annotations for specific analyses: DOUBLE_MINUTES, CANDIDATE_VIS_DOUBLE_MINUTES, LINE_CHAINS, UNDER_CLUSTERING
+log_reportable_fusion | only log reportable fusions
+fusion_gene_distance | distance upstream of gene to consider a breakend applicable (default = 100K)
+restricted_fusion_genes | restrict fusion search to specified genes, separated by ';'
+log_debug | logs in debug mode
 
 ### Running LINX from the HMF MySQL database
 Linx can source structural variants, copy number and purity data from the HMF MySQL database instead of from the VCF and TSV files.
@@ -832,12 +833,12 @@ Finally linx sets a likelihood for each reported fusion. KNOWN_PAIR, IG_KNOWN_PA
 
 #### Amplification, deletion and disruption drivers
 
-##### Homozygous disruption drivers
+##### Disruption drivers
 Linx can optionally take as input a catalog of point mutation, amplification and homozygous deletion drivers which is created by PURPLE based on the raw somatic variant data and determined copy number profile. Linx leverages it’s chaining logic to extend the driver catalog by searching for 2 additional types of biallelic disruptions which disrupt all copies of the gene but do not cause a homozygous deletion in an exonic segment (which is PURPLE’s criteria for homozygous deletion). Specifically Linx searches for 2 additional types of homozygous disruptions:
 * Disruptive Breakends - Any pair of disruptive breakends that form a deletion bridge or are oriented away from each other and both cause the copy number to drop to <0.5 after allowing for the JCN of any overlapping deletion bridges. 
 * Disruptive Duplications - Any duplication which has both breakends disruptive in the transcript and a JCN >= flanking copy number at both ends.
 
-Non-homozygous disruptions are not marked as reportable, but can be identified by searching for genes with breakends marked as disruptive
+For completeness, non-homozygous disruptions are also marked as reportable and added to the driver catalog but with driverLikelihood = 0.
 
 ##### Linkage of drivers to contributing structural variant clusters 
 We link each driver in the catalog that is affected by genomic rearrangements (ie. high level amplifications, homozygous deletions and biallelic point mutations in TSG with LOH and the homozygous disruptions found by Linx) to each structural variant cluster which contributed to the driver. 1 or more structural variant clusters may contribute to each event and/or the driver may be caused by a whole chromosome or whole arm event which cannot be mapped to a specific variant but which has caused significant copy number gain or loss
@@ -867,36 +868,23 @@ Shown below is an example of a SS18-SSX1 fusion:
 
 ## Version History
 
+- [1.19](https://github.com/hartwigmedical/hmftools/releases/tag/linx-v1.19)
+- [1.18](https://github.com/hartwigmedical/hmftools/releases/tag/linx-v1.18)
 - [1.17](https://github.com/hartwigmedical/hmftools/releases/tag/linx-v1.17)
 - [1.16](https://github.com/hartwigmedical/hmftools/releases/tag/linx-v1.16)
-
 - [1.15](https://github.com/hartwigmedical/hmftools/releases/tag/sv-linx-v1.15)
-
 - [1.14](https://github.com/hartwigmedical/hmftools/releases/tag/sv-linx-v1.14)
-
 - [1.13](https://github.com/hartwigmedical/hmftools/releases/tag/sv-linx-v1.13) 
-
 - [1.12](https://github.com/hartwigmedical/hmftools/releases/tag/sv-linx-v1.12) 
-
 - [1.11](https://github.com/hartwigmedical/hmftools/releases/tag/sv-linx-v1.11) 
-
 - [1.10](https://github.com/hartwigmedical/hmftools/releases/tag/sv-linx-v1.10) 
-
 - [1.9](https://github.com/hartwigmedical/hmftools/releases/tag/sv-linx-v1.9) 
-
 - [1.8](https://github.com/hartwigmedical/hmftools/releases/tag/sv-linx-v1.8) 
-
 - [1.7](https://github.com/hartwigmedical/hmftools/releases/tag/sv-linx-v1.7) 
-
 - [1.6](https://github.com/hartwigmedical/hmftools/releases/tag/sv-linx-v1.6) 
-
 - [1.5](https://github.com/hartwigmedical/hmftools/releases/tag/sv-linx-v1.5) 
-
 - [1.4](https://github.com/hartwigmedical/hmftools/releases/tag/sv-linx-v1.4) 
-
 - [1.3](https://github.com/hartwigmedical/hmftools/releases/tag/sv-linx-v1.3) 
-
 - [1.2](https://github.com/hartwigmedical/hmftools/releases/tag/sv-linx-v1.2) 
-
 - [1.1](https://github.com/hartwigmedical/hmftools/releases/tag/sv-linx-v1.1) 
 

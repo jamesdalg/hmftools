@@ -33,9 +33,6 @@ public abstract class EventClassifierConfig {
     public abstract Set<String> geneLevelBlacklistKeyPhrases();
 
     @NotNull
-    public abstract Set<String> geneWildTypesKeyPhrases();
-
-    @NotNull
     public abstract Set<String> genericGeneLevelKeyPhrases();
 
     @NotNull
@@ -45,17 +42,29 @@ public abstract class EventClassifierConfig {
     public abstract Set<String> inactivatingGeneLevelKeyPhrases();
 
     @NotNull
+    public abstract Set<String> wildTypeKeyPhrases();
+
+    @NotNull
     public abstract Set<String> amplificationKeywords();
 
     @NotNull
     public abstract Set<String> amplificationKeyPhrases();
+    @NotNull
+    public abstract Set<String> overExpressionKeywords();
+
+    @NotNull
+    public abstract Set<String> overExpressionKeyPhrases();
 
     @NotNull
     public abstract Set<String> deletionBlacklistKeyPhrases();
 
     @NotNull
     public abstract Set<String> deletionKeywords();
+    @NotNull
+    public abstract Set<String> underExpressionKeywords();
 
+    @NotNull
+    public abstract Set<String> underExpressionKeyPhrases();
     @NotNull
     public abstract Set<String> deletionKeyPhrases();
 
@@ -72,28 +81,28 @@ public abstract class EventClassifierConfig {
     public abstract Set<String> promiscuousFusionKeyPhrases();
 
     @NotNull
-    public abstract Set<String> microsatelliteStableEvents();
+    public abstract Set<String> microsatelliteStableKeyPhrases();
 
     @NotNull
-    public abstract Set<String> microsatelliteUnstableEvents();
+    public abstract Set<String> microsatelliteUnstableKeyPhrases();
 
     @NotNull
-    public abstract Set<String> highTumorMutationalLoadEvents();
+    public abstract Set<String> highTumorMutationalLoadKeyPhrases();
 
     @NotNull
-    public abstract Set<String> lowTumorMutationalLoadEvents();
+    public abstract Set<String> lowTumorMutationalLoadKeyPhrases();
 
     @NotNull
-    public abstract Set<String> highTumorMutationalBurdenEvents();
+    public abstract Set<String> highTumorMutationalBurdenKeyPhrases();
 
     @NotNull
-    public abstract Set<String> lowTumorMutationalBurdenEvents();
+    public abstract Set<String> lowTumorMutationalBurdenKeyPhrases();
 
     @NotNull
-    public abstract Set<String> hrDeficiencyEvents();
+    public abstract Set<String> hrDeficiencyKeyPhrases();
 
     @NotNull
-    public abstract Set<String> hlaEvents();
+    public abstract Set<String> hlaKeyPhrases();
 
     @NotNull
     public abstract Set<String> hpvPositiveEvents();

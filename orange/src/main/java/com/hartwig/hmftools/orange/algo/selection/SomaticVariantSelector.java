@@ -18,7 +18,7 @@ import org.jetbrains.annotations.Nullable;
 
 public final class SomaticVariantSelector {
 
-    private static final Set<String> CUPPA_GENES = Sets.newHashSet("ALB", "SFTPB", "SLC34A2");
+    static final Set<String> CUPPA_GENES = Sets.newHashSet("ALB", "SFTPB", "SLC34A2");
 
     private SomaticVariantSelector() {
     }
@@ -29,7 +29,7 @@ public final class SomaticVariantSelector {
         List<ReportableVariant> filtered = Lists.newArrayList();
         for (SomaticVariant variant : unreportedVariants) {
             boolean isHotspot = variant.isHotspot();
-            boolean hasEvidence = EvidenceSelector.hasEvidence(evidences, ProtectEventGenerator.variantEvent(variant));
+            boolean hasEvidence = EvidenceSelector.hasEvidence(evidences, variant.gene(), ProtectEventGenerator.variantEvent(variant));
             boolean isCodingAndHasPhasedReportedVariant =
                     !variant.gene().isEmpty() && hasReportedVariantWithPhase(reportedSomaticVariants, variant.topLocalPhaseSet());
             boolean isCuppaRelevantVariant = isRelevantForCuppa(variant);

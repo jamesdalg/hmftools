@@ -2,29 +2,35 @@ package com.hartwig.hmftools.cup.somatics;
 
 import static java.lang.Math.pow;
 
+import static com.hartwig.hmftools.common.utils.FileWriterUtils.createBufferedWriter;
+import static com.hartwig.hmftools.common.utils.MatrixFile.DEFAULT_MATRIX_DELIM;
 import static com.hartwig.hmftools.cup.CuppaConfig.CUP_LOGGER;
 import static com.hartwig.hmftools.cup.common.CupCalcs.convertToPercentages;
 import static com.hartwig.hmftools.cup.somatics.SomaticDataLoader.loadRefSampleCounts;
 
+import java.io.BufferedWriter;
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import com.google.common.collect.Lists;
 import com.hartwig.hmftools.common.utils.Matrix;
 
 public final class SomaticsCommon
 {
-    public static final String SPLIT_AID_APOBEC = "split_aid_apobec_gen_pos";
-    public static final String SPLIT_AID_APOBEC_DESC = "Exclude 8 AID/APOBEC trinucleotide contexts from genomic positions";
-
-    public static final String NORMALISE_COPY_NUMBER = "normalise_cn";
-    public static final String NORMALISE_COPY_NUMBER_DESC = "Adjust genomic-position counts by copy number ";
-
-    public static final String EXCLUDE_SNV_96_AID_APOBEC = "exclude_aid_apobec_snv_96";
-    public static final String EXCLUDE_SNV_96_AID_APOBEC_DESC = "Exclude 8 AID/APOBEC trinucleotide contexts from SNV-96 counts";
+    public static final String INCLUDE_AID_APOBEC = "include_aid_apobec_gen_pos";
+    public static final String INCLUDE_AID_APOBEC_DESC = "Include 8 AID/APOBEC trinucleotide contexts in genomic positions";
 
     public static final String INCLUDE_AID_APOBEC_SIG = "aid_apobec_sig_feature";
     public static final String INCLUDE_AID_APOBEC_SIG_DESC = "Add an enriched AID/APOBEC signature feature";
+
+    public static final String EXCLUDE_GEN_POS_CHR_X = "exclude_gen_pos_chr_x";
+    public static final String EXCLUDE_GEN_POS_CHR_X_DESC = "Exclude chromosome X from genomic position";
+
+    public static final String INTEGER_FORMAT = "%.0f";
+    public static final String DEC_1_FORMAT = "%.1f";
+    public static final String DEC_3_FORMAT = "%.3f";
 
     public static void applyMaxCssAdjustment(double maxCssScore, final Map<String,Double> cancerCssTotals, double adjustFactor)
     {
@@ -64,8 +70,10 @@ public final class SomaticsCommon
 
             if(combinedMatrix == null)
             {
-                combinedMatrix = new Matrix(subMatrix.Rows, refSampleCount);
+                combinedMatrix = new Matrix(refSampleCount, subMatrix.Rows);
             }
+
+            final double[][] combinedData = combinedMatrix.getData();
 
             for(int s = 0; s < samplesList.size(); ++s)
             {
@@ -76,18 +84,15 @@ public final class SomaticsCommon
 
                 sampleCountsIndex.put(sampleId, sampleIndex);
 
-                for(int r = 0; r < combinedMatrix.Rows; ++r)
+                for(int b = 0; b < combinedMatrix.Cols; ++b)
                 {
-                    combinedMatrix.set(r, sampleIndex, subData[r][s]);
+                    combinedData[sampleIndex][b] = subData[s][b];
                 }
 
                 ++sampleIndex;
             }
         }
 
-        combinedMatrix.cacheTranspose();
-
         return combinedMatrix;
     }
-
 }

@@ -17,7 +17,7 @@ The input for Isofox is mapped paired end reads (we use STAR for our aligner).
 ### A note on duplicates, highly expressed genes, raw and adjusted TPM
 We recommend to mark duplicates in your pipeline. They are included in gene and transcript expression data (to avoid bias against highly expressed genes) but excluded from novel splice junction analysis.  
 
-We find that 6 genes in particular (RN7SL2,RN7SL1,RN7SL3,RN7SL4P,RN7SL5P & RN7SK) and are highly expressed across our cohort and at variable rates - in extreme samples these can account for >75% of all transcripts. Isofox excludes these genes from our GC bias calculations and to determine a normalisation factor for "adjusted TPM" so that they don't dominate expression differences.  For any given sample, AdjustedTPM = rawTPM x constant with the constant determined by the normalisation (which excludes the 6 genes and also limits all other genes to 1% contribution). The adjusted TPMs no longer sum to 1M transcripts, but should be more comparable across samples.  We suggest to use the adjusted TPM for expression analysis.
+We find that 6 genes in particular (RN7SL2, RN7SL1, RN7SL3, RN7SL4P, RN7SL5P & RN7SK) and are highly expressed across our cohort and at variable rates - in extreme samples these can account for >75% of all transcripts. Isofox excludes these genes from our GC bias calculations and to determine a normalisation factor for "adjusted TPM" so that they don't dominate expression differences.  For any given sample, AdjustedTPM = rawTPM x constant with the constant determined by the normalisation (which excludes the 6 genes and also limits all other genes to 1% contribution). The adjusted TPMs no longer sum to 1M transcripts, but should be more comparable across samples.  We suggest to use the adjusted TPM for expression analysis.
 
 In addition, any junction which maps in the Poly-G region of LINC00486 is filtered from all analyses (v38: chr2:32,916,190-32,916,630; v37: 2:33,141,260-33,141,700) as they are likely the result of Poly-G sequencer artefacts.
 
@@ -65,7 +65,7 @@ enriched_gene_ids | List of EnsemblGeneIds separated by ';', see Enriched Genes 
 drop_dups | Default is false. By default duplicate fragments will be counted towards transcript expression.
 
 ### Reference Files
-Reference files are available for HG19 and HG38 [HMFTools-Resources](https://resources.hartwigmedicalfoundation.nl/):
+Reference files are available for GRCh37 and GRCh38 [HMFTools-Resources](https://resources.hartwigmedicalfoundation.nl/):
 - Isofox: expected transcript expression and GC Bias
 - KnownFusions: HMF known fusion data
 - Ensembl: cached Ensembl files.  Instructions for how to generate can be found [here](https://github.com/hartwigmedical/hmftools/tree/master/gene-utils#generating-cached-ensembl-data-files)
@@ -505,9 +505,10 @@ OtherGenesDown | Other genes which match the down breakpoint
 RelatedFusions | Ids of other fusions in the same gene which may be caused by the same structural variant
 
 ## Version History and Download Links
-- [1.0](https://github.com/hartwigmedical/hmftools/releases/tag/isofox-v1.0)
-- [1.1](https://github.com/hartwigmedical/hmftools/releases/tag/isofox-v1.1)
-- [1.2](https://github.com/hartwigmedical/hmftools/releases/tag/isofox-v1.2)
-- [1.3](https://github.com/hartwigmedical/hmftools/releases/tag/isofox-v1.3)
+- [1.5](https://github.com/hartwigmedical/hmftools/releases/tag/isofox-v1.5)
 - [1.4](https://github.com/hartwigmedical/hmftools/releases/tag/isofox-v1.4)
+- [1.3](https://github.com/hartwigmedical/hmftools/releases/tag/isofox-v1.3)
+- [1.2](https://github.com/hartwigmedical/hmftools/releases/tag/isofox-v1.2)
+- [1.1](https://github.com/hartwigmedical/hmftools/releases/tag/isofox-v1.1)
+- [1.0](https://github.com/hartwigmedical/hmftools/releases/tag/isofox-v1.0)
 

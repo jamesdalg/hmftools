@@ -1,6 +1,6 @@
 # Lilac
 
-LILAC is a WGS tool to determine the HLA Class I types for the germline of each patient as well as determining the status of each of those alleles in the tumor including complete loss of one or more alleles, allele specific somatic mutations and allelic imbalance.
+LILAC is a WGS tool to determine the HLA Class I types for the germline of each patient as well as determining the status of each of those alleles in the tumor including complete loss of one or more alleles, allele specific somatic mutations and allelic imbalance.  Lilac is described in this preprint(https://www.biorxiv.org/content/10.1101/2022.02.23.481444v1.full.pdf).
 
 LILAC uses the IMGT/HLA database (https://www.ebi.ac.uk/ipd/imgt/hla/download.html) as a reference set of Human MHC class I alleles, and performs typing to 4-digits, which means it uniquely identifies a specific protein, but ignores synonymous variants (6 digits) and intronic differences (8 digits).
 
@@ -47,6 +47,7 @@ Argument | Description
 ---|---
 sample | Sample ID
 ref_genome | Reference genome fasta file
+ref_genome_version | V37 (default), V38 or HG19 (ie 37 with 'chr' prefix)
 reference_bam | Sample's germline BAM 
 resource_dir | Path to Lilac resource files, ie hla_ref_aminoacid_sequences.csv, hla_ref_nucleotide_sequences.csv and lilac_allele_frequencies.csv.
 
@@ -58,7 +59,6 @@ If a sample's tumor BAM is provided in place of the reference BAM, then Lilac wi
 
 Argument | Description 
 ---|---
-ref_genome_version | V37 (default), V38 or HG19 (ie 37 with 'chr' prefix)
 tumor_bam | Sample's tumor BAM
 rna_bam | Sample's RNA BAM if available
 gene_copy_number_file | Sample gene copy number file from Purple
@@ -75,6 +75,7 @@ min_high_qual_evidence_factor | 0.000375 | Minimum relative required high base-q
 min_fragments_per_allele | 7 | See documentation for details 
 min_fragments_to_remove_single | 40 | See documentation for details 
 top_score_threshold | 5 | Maximum difference in candidate solution score vs top score as a percentage of total fragments 
+write_all_files | false | Produce more detailed output about candidates and fragment counts per allele and loci
 log_debug | Off (logs at INFO) | Logs in verbose mode 
 debug_phasing | Off | Logs phasing evidence construction 
 expected_alleles | Not applied | List of alleles separated by ';'. These alleles will have their coverage and ranking reported even if not in the winning solution
@@ -223,7 +224,7 @@ LILAC also optionally accepts a RNA bam.  As per the fragments in the bam are co
 
 ### QC metrics and PON
 
-LILAC produces a comprehensive set of QC metrics and provides warning statuses if the typing confidence may be diminished.   The full list of possible QC warnings is
+LILAC produces a comprehensive set of QC metrics and provides warning statuses if the typing confidence may be diminished. The full list of possible QC warnings is
 
 Warning | Description 
 --- | ---
@@ -368,8 +369,8 @@ nucleotide matches are permitted.
  </pre>
 
 ## Version History and Download Links
-- [1.0](https://github.com/hartwigmedical/hmftools/releases/tag/lilac-v1.0)
-- [1.1](https://github.com/hartwigmedical/hmftools/releases/tag/lilac-v1.1)
 - [1.2](https://github.com/hartwigmedical/hmftools/releases/tag/lilac-v1.2)
+- [1.1](https://github.com/hartwigmedical/hmftools/releases/tag/lilac-v1.1)
+- [1.0](https://github.com/hartwigmedical/hmftools/releases/tag/lilac-v1.0)
 
  

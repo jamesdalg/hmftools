@@ -9,7 +9,9 @@ import static com.hartwig.hmftools.common.variant.VariantType.SNP;
 import static com.hartwig.hmftools.common.variant.msi.MicrosatelliteStatus.MSS;
 import static com.hartwig.hmftools.cup.CuppaConfig.CUP_LOGGER;
 import static com.hartwig.hmftools.cup.CuppaConfig.DATA_DELIM;
+import static com.hartwig.hmftools.cup.CuppaRefFiles.purpleSomaticVcfFile;
 import static com.hartwig.hmftools.cup.feature.FeatureType.DRIVER;
+import static com.hartwig.hmftools.cup.feature.SampleFeatureData.AMP_CN;
 import static com.hartwig.hmftools.cup.feature.SampleFeatureData.DRIVER_CHROMOSOME;
 import static com.hartwig.hmftools.cup.feature.SampleFeatureData.DRIVER_TYPE;
 import static com.hartwig.hmftools.cup.feature.SampleFeatureData.DRIVER_TYPE_AMP;
@@ -101,14 +103,14 @@ public class FeatureDataLoader
     }
 
     public static boolean loadFeaturesFromFile(
-            final String sampleId, final String sampleDataDir, final String sampleVcfFile,
+            final String sampleId, final String linxDataDir, final String purpleDataDir,
             final Map<String,List<SampleFeatureData>> sampleFeaturesMap)
     {
         // extract features from standard pipeline output files and fail if any cannot be loaded
         try
         {
-            String viralInsertFilename = LinxViralInsertion.generateFilename(sampleDataDir, sampleId);
-            String viralAnnotationFilename = AnnotatedVirusFile.generateFileName(sampleDataDir, sampleId);
+            String viralInsertFilename = LinxViralInsertion.generateFilename(linxDataDir, sampleId);
+            String viralAnnotationFilename = AnnotatedVirusFile.generateFileName(linxDataDir, sampleId);
 
             final List<AnnotatedVirus> virusAnnotations = Lists.newArrayList();
 
@@ -122,15 +124,15 @@ public class FeatureDataLoader
                 virusAnnotations.addAll(mapViralInsertsToAnnotations(viralInserts));
             }
 
-            final String fusionsFilename = LinxFusion.generateFilename(sampleDataDir, sampleId);
+            final String fusionsFilename = LinxFusion.generateFilename(linxDataDir, sampleId);
 
             final List<LinxFusion> fusions = LinxFusion.read(fusionsFilename);
 
             // load linx drivers if available, otherwise the purple somatic drivers
             final List<DriverCatalog> drivers = Lists.newArrayList();
 
-            final String linxDriverCatalogFilename = LinxDriver.generateCatalogFilename(sampleDataDir, sampleId, true);
-            final String purpleDriverCatalogFilename = DriverCatalogFile.generateSomaticFilename(sampleDataDir, sampleId);
+            final String linxDriverCatalogFilename = LinxDriver.generateCatalogFilename(linxDataDir, sampleId, true);
+            final String purpleDriverCatalogFilename = DriverCatalogFile.generateSomaticFilename(linxDataDir, sampleId);
 
             if(Files.exists(Paths.get(linxDriverCatalogFilename)))
             {
@@ -146,8 +148,9 @@ public class FeatureDataLoader
                 return false;
             }
 
-            boolean checkIndels = checkIndels(sampleId, sampleDataDir, null);
-            final List<String> indelGenes = loadSpecificMutations(sampleVcfFile, checkIndels);
+            boolean checkIndels = checkIndels(sampleId, purpleDataDir, null);
+            final String somaticVcf = purpleSomaticVcfFile(purpleDataDir, sampleId);
+            final List<String> indelGenes = loadSpecificMutations(somaticVcf, checkIndels);
 
             mapFeatureData(sampleId, sampleFeaturesMap, drivers, fusions, virusAnnotations, indelGenes);
         }
@@ -160,7 +163,7 @@ public class FeatureDataLoader
         return true;
     }
 
-    private static boolean checkIndels(final String sampleId, final String sampleDataDir, final DatabaseAccess dbAccess)
+    private static boolean checkIndels(final String sampleId, final String purpleDataDir, final DatabaseAccess dbAccess)
     {
         PurityContext purityContext = null;
 
@@ -172,12 +175,12 @@ public class FeatureDataLoader
         {
             try
             {
-                purityContext = PurityContextFile.read(sampleDataDir, sampleId);
+                purityContext = PurityContextFile.read(purpleDataDir, sampleId);
             }
             catch (Exception e)
             {
                 CUP_LOGGER.error("sample({}) check indels - failed to load purity file( from dir{}): {}",
-                        sampleId, sampleDataDir, e.toString());
+                        sampleId, purpleDataDir, e.toString());
                 return false;
             }
         }
@@ -398,17 +401,17 @@ public class FeatureDataLoader
 
             if((checkIndels && isKnownIndel(gene, repeatCount, type)) || isKnownEGFRMutation(gene, type, position, ref, alt))
             {
-                final List<String> genes = sampleMutationMap.get(sampleId);
+                List<String> genes = sampleMutationMap.get(sampleId);
+
                 if(genes == null)
                     sampleMutationMap.put(sampleId, Lists.newArrayList(gene));
-                else
+                else if(!genes.contains(gene))
                     genes.add(gene);
             }
         }
 
         return sampleMutationMap;
     }
-
 
     private static List<String> loadSpecificMutations(final String vcfFile, boolean checkIndels)
     {
@@ -418,6 +421,9 @@ public class FeatureDataLoader
 
         for(SomaticVariant variant : variants)
         {
+            if(mutations.contains(variant.Gene))
+                continue;
+
             if((checkIndels && isKnownIndel(variant.Gene, variant.RepeatCount, variant.Type))
             || isKnownEGFRMutation(variant.Gene, variant.Type, variant.Position, variant.Ref, variant.Alt))
             {
@@ -489,10 +495,15 @@ public class FeatureDataLoader
 
                 SampleFeatureData feature = new SampleFeatureData(sampleId, driver.gene(), DRIVER, driver.driverLikelihood());
 
-                if(driver.driver() == DriverType.AMP)
+                if(driver.driver() == DriverType.AMP || driver.driver() == DriverType.PARTIAL_AMP)
+                {
                     feature.ExtraInfo.put(DRIVER_TYPE, DRIVER_TYPE_AMP);
+                    feature.ExtraInfo.put(AMP_CN, String.format("%.1f", driver.maxCopyNumber()));
+                }
                 else if(driver.driver() == DriverType.DEL)
+                {
                     feature.ExtraInfo.put(DRIVER_TYPE, DRIVER_TYPE_DEL);
+                }
 
                 feature.ExtraInfo.put(DRIVER_CHROMOSOME, driver.chromosome());
 
@@ -574,15 +585,15 @@ public class FeatureDataLoader
                 if(prevData == null)
                     continue;
 
-                FeaturePrevCounts genePrevTotals = featurePrevTotals.get(prevData.Name);
+                FeaturePrevCounts prevTotals = featurePrevTotals.get(prevData.typeName());
 
-                if(genePrevTotals == null)
+                if(prevTotals == null)
                 {
-                    genePrevTotals = new FeaturePrevCounts();
-                    featurePrevTotals.put(prevData.Name, genePrevTotals);
+                    prevTotals = new FeaturePrevCounts();
+                    featurePrevTotals.put(prevData.typeName(), prevTotals);
                 }
 
-                genePrevTotals.MaxPrevalence = max(genePrevTotals.MaxPrevalence, prevData.Prevalence);
+                prevTotals.MaxPrevalence = max(prevTotals.MaxPrevalence, prevData.Prevalence);
 
                 final List<FeaturePrevData> dataList = cancerDriverPrevalence.get(prevData.CancerType);
                 if(dataList == null)
@@ -604,11 +615,12 @@ public class FeatureDataLoader
         return true;
     }
 
-    public static boolean loadRefFeatureOverrides(
-            final String filename, final Map<String,List<FeaturePrevData>> cancerFeaturePrevOverrides)
+    public static List<FeaturePrevData> loadRefFeatureOverrides(final String filename)
     {
+        final List<FeaturePrevData> cancerFeaturePrevOverrides = Lists.newArrayList();
+
         if(filename == null || filename.isEmpty())
-            return true;
+            return cancerFeaturePrevOverrides;
 
         try
         {
@@ -620,24 +632,18 @@ public class FeatureDataLoader
             {
                 final FeaturePrevData prevData = FeaturePrevData.from(line);
 
-                if(prevData == null)
-                    continue;
-
-                final List<FeaturePrevData> dataList = cancerFeaturePrevOverrides.get(prevData.Name);
-
-                if(dataList == null)
-                    cancerFeaturePrevOverrides.put(prevData.Name, Lists.newArrayList(prevData));
-                else
-                    dataList.add(prevData);
+                if(prevData != null)
+                {
+                    cancerFeaturePrevOverrides.add(prevData);
+                }
             }
         }
         catch (IOException e)
         {
             CUP_LOGGER.error("failed to read feature overrides prevalence data file: {}", e.toString());
-            return false;
         }
 
-        return true;
+        return cancerFeaturePrevOverrides;
     }
 
     public static boolean loadRefCancerFeatureAvg(final String filename, final Map<String,Double> cancerFeatureAvgs)

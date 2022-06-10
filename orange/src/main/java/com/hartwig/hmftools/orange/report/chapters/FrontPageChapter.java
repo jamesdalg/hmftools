@@ -10,26 +10,28 @@ import com.google.common.collect.Sets;
 import com.hartwig.hmftools.common.chord.ChordAnalysis;
 import com.hartwig.hmftools.common.chord.ChordStatus;
 import com.hartwig.hmftools.common.cuppa.CuppaData;
+import com.hartwig.hmftools.common.cuppa.CuppaPrediction;
 import com.hartwig.hmftools.common.doid.DoidNode;
 import com.hartwig.hmftools.common.linx.ReportableHomozygousDisruption;
+import com.hartwig.hmftools.common.peach.PeachGenotype;
 import com.hartwig.hmftools.common.protect.ProtectEvidence;
 import com.hartwig.hmftools.common.purple.PurpleData;
 import com.hartwig.hmftools.common.purple.PurpleQCStatus;
-import com.hartwig.hmftools.common.purple.copynumber.ReportableGainLoss;
-import com.hartwig.hmftools.common.serve.actionability.EvidenceLevel;
+import com.hartwig.hmftools.common.purple.interpretation.GainLoss;
 import com.hartwig.hmftools.common.sv.linx.LinxFusion;
 import com.hartwig.hmftools.common.variant.DriverInterpretation;
 import com.hartwig.hmftools.common.variant.ReportableVariant;
 import com.hartwig.hmftools.common.variant.ReportableVariantFactory;
 import com.hartwig.hmftools.common.virus.AnnotatedVirus;
 import com.hartwig.hmftools.orange.algo.OrangeReport;
+import com.hartwig.hmftools.orange.algo.cuppa.CuppaInterpretation;
 import com.hartwig.hmftools.orange.cohort.datamodel.Evaluation;
 import com.hartwig.hmftools.orange.cohort.mapping.CohortConstants;
 import com.hartwig.hmftools.orange.cohort.percentile.PercentileType;
 import com.hartwig.hmftools.orange.report.ReportResources;
-import com.hartwig.hmftools.orange.report.util.CellUtil;
-import com.hartwig.hmftools.orange.report.util.ImageUtil;
-import com.hartwig.hmftools.orange.report.util.TableUtil;
+import com.hartwig.hmftools.orange.report.util.Cells;
+import com.hartwig.hmftools.orange.report.util.Images;
+import com.hartwig.hmftools.orange.report.util.Tables;
 import com.itextpdf.kernel.geom.PageSize;
 import com.itextpdf.layout.Document;
 import com.itextpdf.layout.element.Cell;
@@ -77,88 +79,90 @@ public class FrontPageChapter implements ReportChapter {
     }
 
     private void addSummaryTable(@NotNull Document document) {
-        Table table = TableUtil.createContent(contentWidth(),
+        Table table = Tables.createContent(contentWidth(),
                 new float[] { 3, 2, 1 },
-                new Cell[] { CellUtil.createHeader("Configured Primary Tumor"), CellUtil.createHeader("Cuppa Cancer Type"),
-                        CellUtil.createHeader("QC") });
+                new Cell[] { Cells.createHeader("Configured Primary Tumor"), Cells.createHeader("Cuppa Cancer Type"),
+                        Cells.createHeader("QC") });
 
-        table.addCell(CellUtil.createContent(toConfiguredPrimaryTumor(report.configuredPrimaryTumor())));
-        table.addCell(CellUtil.createContent(toCuppaCancerType(report.cuppa())));
-        table.addCell(CellUtil.createContent(purpleQCString()));
-        document.add(TableUtil.createWrapping(table));
+        table.addCell(Cells.createContent(configuredPrimaryTumor(report.configuredPrimaryTumor())));
+        table.addCell(Cells.createContent(cuppaCancerType(report.cuppa())));
+        table.addCell(Cells.createContent(purpleQCString()));
+        document.add(Tables.createWrapping(table));
     }
 
     @NotNull
-    private static String toCuppaCancerType(@NotNull CuppaData cuppa) {
-        return cuppa.predictedCancerType() + " (" + PERCENTAGE.format(cuppa.bestPredictionLikelihood() * 100) + ")";
+    private static String cuppaCancerType(@NotNull CuppaData cuppa) {
+        CuppaPrediction best = CuppaInterpretation.best(cuppa);
+        return best.cancerType() + " (" + PERCENTAGE.format(best.likelihood() * 100) + ")";
     }
 
     @NotNull
-    private static String toConfiguredPrimaryTumor(@NotNull Set<DoidNode> nodes) {
-        StringJoiner joiner = new StringJoiner(", ");
-
+    private static String configuredPrimaryTumor(@NotNull Set<DoidNode> nodes) {
+        Set<String> configured = Sets.newHashSet();
         for (DoidNode node : nodes) {
-            joiner.add(node.doidTerm() + " (DOID " + node.doid() + ")");
+            configured.add(node.doidTerm() + " (DOID " + node.doid() + ")");
         }
 
-        return joiner.toString();
+        return concat(configured);
     }
 
     @NotNull
     private String purpleQCString() {
-        StringJoiner joiner = new StringJoiner(", ");
+        Set<String> purpleStatuses = Sets.newHashSet();
         for (PurpleQCStatus status : report.purple().qc().status()) {
-            joiner.add(status.toString());
+            purpleStatuses.add(status.toString());
         }
-        return joiner.toString();
+        return concat(purpleStatuses);
     }
 
     private void addDetailsAndPlots(@NotNull Document document) {
         Table topTable = new Table(UnitValue.createPercentArray(new float[] { 1, 1 })).setWidth(contentWidth() - 5);
 
         Table summary = new Table(UnitValue.createPercentArray(new float[] { 1, 1 }));
-        summary.addCell(CellUtil.createKey("Purity:"));
-        summary.addCell(CellUtil.createValue(purityString()));
-        summary.addCell(CellUtil.createKey("Ploidy:"));
-        summary.addCell(CellUtil.createValue(ploidyString()));
-        summary.addCell(CellUtil.createKey("Somatic variant drivers:"));
-        summary.addCell(CellUtil.createValue(somaticDriverString()));
-        summary.addCell(CellUtil.createKey("Germline variant drivers:"));
-        summary.addCell(CellUtil.createValue(germlineDriverString()));
-        summary.addCell(CellUtil.createKey("Copy number drivers:"));
-        summary.addCell(CellUtil.createValue(copyNumberDriverString()));
-        summary.addCell(CellUtil.createKey("Disruption drivers:"));
-        summary.addCell(CellUtil.createValue(disruptionDriverString()));
-        summary.addCell(CellUtil.createKey("Fusion drivers:"));
-        summary.addCell(CellUtil.createValue(fusionDriverString()));
-        summary.addCell(CellUtil.createKey("Viral presence:"));
-        summary.addCell(CellUtil.createValue(virusString()));
-        summary.addCell(CellUtil.createKey("Whole genome duplicated:"));
-        summary.addCell(CellUtil.createValue(report.purple().wholeGenomeDuplication() ? "Yes" : "No"));
-        summary.addCell(CellUtil.createKey("Microsatellite indels per Mb:"));
-        summary.addCell(CellUtil.createValue(msiString()));
-        summary.addCell(CellUtil.createKey("Tumor mutations per Mb:"));
-        summary.addCell(CellUtil.createValue(SINGLE_DIGIT.format(report.purple().tumorMutationalBurdenPerMb())));
-        summary.addCell(CellUtil.createKey("Tumor mutational load:"));
-        summary.addCell(CellUtil.createValue(tmlString()));
-        summary.addCell(CellUtil.createKey("HR deficiency score:"));
-        summary.addCell(CellUtil.createValue(hrDeficiencyString()));
-        summary.addCell(CellUtil.createKey("Number of SVs:"));
-        summary.addCell(CellUtil.createValue(svTmbString()));
-        summary.addCell(CellUtil.createKey("Max complex cluster size:"));
-        summary.addCell(CellUtil.createValue(Integer.toString(report.cuppa().maxComplexSize())));
-        summary.addCell(CellUtil.createKey("Telomeric SGLs:"));
-        summary.addCell(CellUtil.createValue(Integer.toString(report.cuppa().telomericSGLs())));
-        summary.addCell(CellUtil.createKey("Number of LINE insertions:"));
-        summary.addCell(CellUtil.createValue(Integer.toString(report.cuppa().LINECount())));
-        summary.addCell(CellUtil.createKey("On-label treatments:"));
-        summary.addCell(CellUtil.createValue(onLabelTreatmentString()));
-        summary.addCell(CellUtil.createKey("Off-label treatments:"));
-        summary.addCell(CellUtil.createValue(offLabelTreatmentString()));
+        summary.addCell(Cells.createKey("Purity:"));
+        summary.addCell(Cells.createValue(purityString()));
+        summary.addCell(Cells.createKey("Ploidy:"));
+        summary.addCell(Cells.createValue(ploidyString()));
+        summary.addCell(Cells.createKey("Somatic variant drivers:"));
+        summary.addCell(Cells.createValue(somaticDriverString()));
+        summary.addCell(Cells.createKey("Germline variant drivers:"));
+        summary.addCell(Cells.createValue(germlineDriverString()));
+        summary.addCell(Cells.createKey("Copy number drivers:"));
+        summary.addCell(Cells.createValue(copyNumberDriverString()));
+        summary.addCell(Cells.createKey("Disruption drivers:"));
+        summary.addCell(Cells.createValue(disruptionDriverString()));
+        summary.addCell(Cells.createKey("Fusion drivers:"));
+        summary.addCell(Cells.createValue(fusionDriverString()));
+        summary.addCell(Cells.createKey("Viral presence:"));
+        summary.addCell(Cells.createValue(virusString()));
+        summary.addCell(Cells.createKey("Whole genome duplicated:"));
+        summary.addCell(Cells.createValue(report.purple().wholeGenomeDuplication() ? "Yes" : "No"));
+        summary.addCell(Cells.createKey("Microsatellite indels per Mb:"));
+        summary.addCell(Cells.createValue(msiString()));
+        summary.addCell(Cells.createKey("Tumor mutations per Mb:"));
+        summary.addCell(Cells.createValue(SINGLE_DIGIT.format(report.purple().tumorMutationalBurdenPerMb())));
+        summary.addCell(Cells.createKey("Tumor mutational load:"));
+        summary.addCell(Cells.createValue(tmlString()));
+        summary.addCell(Cells.createKey("HR deficiency score:"));
+        summary.addCell(Cells.createValue(hrDeficiencyString()));
+        summary.addCell(Cells.createKey("DPYD status:"));
+        summary.addCell(Cells.createValue(dpydStatus()));
+        summary.addCell(Cells.createKey("Number of SVs:"));
+        summary.addCell(Cells.createValue(svTmbString()));
+        summary.addCell(Cells.createKey("Max complex cluster size:"));
+        summary.addCell(Cells.createValue(Integer.toString(report.cuppa().maxComplexSize())));
+        summary.addCell(Cells.createKey("Telomeric SGLs:"));
+        summary.addCell(Cells.createValue(Integer.toString(report.cuppa().telomericSGLs())));
+        summary.addCell(Cells.createKey("Number of LINE insertions:"));
+        summary.addCell(Cells.createValue(Integer.toString(report.cuppa().LINECount())));
+        summary.addCell(Cells.createKey("On-label treatments:"));
+        summary.addCell(Cells.createValue(onLabelTreatmentString()));
+        summary.addCell(Cells.createKey("Off-label treatments:"));
+        summary.addCell(Cells.createValue(offLabelTreatmentString()));
 
-        Image circosImage = ImageUtil.build(report.plots().purpleFinalCircosPlot());
+        Image circosImage = Images.build(report.plots().purpleFinalCircosPlot());
         circosImage.setHorizontalAlignment(HorizontalAlignment.CENTER);
-        circosImage.setMaxHeight(280);
+        circosImage.setMaxHeight(290);
 
         topTable.addCell(summary);
         topTable.addCell(circosImage);
@@ -166,9 +170,9 @@ public class FrontPageChapter implements ReportChapter {
         Table table = new Table(UnitValue.createPercentArray(new float[] { 1 })).setWidth(contentWidth()).setPadding(0);
         table.addCell(topTable);
 
-        Image clonalityImage = ImageUtil.build(report.plots().purpleClonalityPlot());
+        Image clonalityImage = Images.build(report.plots().purpleClonalityPlot());
         clonalityImage.setHorizontalAlignment(HorizontalAlignment.CENTER);
-        clonalityImage.setMaxHeight(280);
+        clonalityImage.setMaxHeight(270);
 
         table.addCell(clonalityImage);
         document.add(table);
@@ -215,86 +219,73 @@ public class FrontPageChapter implements ReportChapter {
     private static String variantDriverString(@NotNull List<ReportableVariant> variants) {
         if (variants.isEmpty()) {
             return NONE;
-        } else {
-            Set<String> highDriverGenes = Sets.newTreeSet(Comparator.naturalOrder());
-            for (ReportableVariant variant : variants) {
-                if (variant.driverLikelihoodInterpretation() == DriverInterpretation.HIGH) {
-                    highDriverGenes.add(variant.gene());
-                }
-            }
+        }
 
-            if (highDriverGenes.isEmpty()) {
-                return String.valueOf(variants.size());
-            } else {
-                StringJoiner joiner = new StringJoiner(", ");
-                for (String gene : highDriverGenes) {
-                    joiner.add(gene);
-                }
-
-                return variants.size() + " (" + joiner.toString() + ")";
+        Set<String> highDriverGenes = Sets.newTreeSet(Comparator.naturalOrder());
+        for (ReportableVariant variant : variants) {
+            if (variant.driverLikelihoodInterpretation() == DriverInterpretation.HIGH) {
+                highDriverGenes.add(variant.gene());
             }
         }
+
+        return !highDriverGenes.isEmpty() ? variants.size() + " (" + concat(highDriverGenes) + ")" : String.valueOf(variants.size());
     }
 
     @NotNull
     private String copyNumberDriverString() {
-        if (report.purple().reportableGainsLosses().isEmpty()) {
+        if (report.purple().reportableSomaticGainsLosses().isEmpty()) {
             return NONE;
-        } else {
-            StringJoiner joiner = new StringJoiner(", ");
-            for (ReportableGainLoss gainLoss : report.purple().reportableGainsLosses()) {
-                joiner.add(gainLoss.gene());
-            }
-            return report.purple().reportableGainsLosses().size() + " (" + joiner.toString() + ")";
         }
+
+        Set<String> genes = Sets.newTreeSet(Comparator.naturalOrder());
+        for (GainLoss gainLoss : report.purple().reportableSomaticGainsLosses()) {
+            genes.add(gainLoss.gene());
+        }
+        return report.purple().reportableSomaticGainsLosses().size() + " (" + concat(genes) + ")";
     }
 
     @NotNull
     private String disruptionDriverString() {
         if (report.linx().homozygousDisruptions().isEmpty()) {
             return NONE;
-        } else {
-            StringJoiner joiner = new StringJoiner(", ");
-            for (ReportableHomozygousDisruption disruption : report.linx().homozygousDisruptions()) {
-                joiner.add(disruption.gene());
-            }
-            return report.linx().homozygousDisruptions().size() + " (" + joiner.toString() + ")";
         }
+
+        Set<String> genes = Sets.newTreeSet(Comparator.naturalOrder());
+        for (ReportableHomozygousDisruption disruption : report.linx().homozygousDisruptions()) {
+            genes.add(disruption.gene());
+        }
+        return report.linx().homozygousDisruptions().size() + " (" + concat(genes) + ")";
     }
 
     @NotNull
     private String fusionDriverString() {
         if (report.linx().reportableFusions().isEmpty()) {
             return NONE;
-        } else {
-            StringJoiner joiner = new StringJoiner(", ");
-            for (LinxFusion fusion : report.linx().reportableFusions()) {
-                joiner.add(fusion.name());
-            }
-            return report.linx().reportableFusions().size() + " (" + joiner.toString() + ")";
         }
+
+        Set<String> fusions = Sets.newTreeSet(Comparator.naturalOrder());
+        for (LinxFusion fusion : report.linx().reportableFusions()) {
+            fusions.add(fusion.name());
+        }
+        return report.linx().reportableFusions().size() + " (" + concat(fusions) + ")";
     }
 
     @NotNull
     private String virusString() {
         if (report.virusInterpreter().reportableViruses().isEmpty()) {
             return NONE;
-        } else {
-            Set<String> viruses = Sets.newTreeSet(Comparator.naturalOrder());
-            for (AnnotatedVirus virus : report.virusInterpreter().reportableViruses()) {
-                if (virus.interpretation() != null) {
-                    viruses.add(virus.interpretation());
-                } else {
-                    viruses.add(virus.name());
-                }
-            }
-
-            StringJoiner joiner = new StringJoiner(", ");
-            for (String virus : viruses) {
-                joiner.add(virus);
-            }
-            return report.virusInterpreter().reportableViruses().size() + " (" + joiner.toString() + ")";
         }
+
+        Set<String> viruses = Sets.newTreeSet(Comparator.naturalOrder());
+        for (AnnotatedVirus virus : report.virusInterpreter().reportableViruses()) {
+            if (virus.interpretation() != null) {
+                viruses.add(virus.interpretation());
+            } else {
+                viruses.add(virus.name());
+            }
+        }
+
+        return report.virusInterpreter().reportableViruses().size() + " (" + concat(viruses) + ")";
     }
 
     @NotNull
@@ -314,19 +305,30 @@ public class FrontPageChapter implements ReportChapter {
         ChordAnalysis chord = report.chord();
         if (chord.hrStatus() == ChordStatus.CANNOT_BE_DETERMINED) {
             return ChordStatus.CANNOT_BE_DETERMINED.display();
-        } else {
-            String addon = Strings.EMPTY;
-            if (chord.hrStatus() == ChordStatus.HR_DEFICIENT) {
-                if (chord.hrdType().contains("BRCA1")) {
-                    addon = " - BRCA1 (" + TWO_DIGITS.format(chord.BRCA1Value()) + ")";
-                } else if (chord.hrdType().contains("BRCA2")) {
-                    addon = " - BRCA2 (" + TWO_DIGITS.format(chord.BRCA2Value()) + ")";
-                } else {
-                    addon = chord.hrdType();
-                }
-            }
-            return SINGLE_DIGIT.format(chord.hrdValue()) + " (" + chord.hrStatus().display() + addon + ")";
         }
+
+        String addon = Strings.EMPTY;
+        if (chord.hrStatus() == ChordStatus.HR_DEFICIENT) {
+            if (chord.hrdType().contains("BRCA1")) {
+                addon = " - BRCA1 (" + TWO_DIGITS.format(chord.BRCA1Value()) + ")";
+            } else if (chord.hrdType().contains("BRCA2")) {
+                addon = " - BRCA2 (" + TWO_DIGITS.format(chord.BRCA2Value()) + ")";
+            } else {
+                addon = chord.hrdType();
+            }
+        }
+        return SINGLE_DIGIT.format(chord.hrdValue()) + " (" + chord.hrStatus().display() + addon + ")";
+    }
+
+    @NotNull
+    private String dpydStatus() {
+        Set<String> haplotypes = Sets.newHashSet();
+        for (PeachGenotype genotype : report.peach()) {
+            if (genotype.gene().equals("DPYD")) {
+                haplotypes.add(genotype.haplotype() + " (" + genotype.function() + ")");
+            }
+        }
+        return !haplotypes.isEmpty() ? concat(haplotypes) : NONE;
     }
 
     @NotNull
@@ -339,7 +341,8 @@ public class FrontPageChapter implements ReportChapter {
             String panCancerPercentile = PERCENTAGE.format(evaluation.panCancerPercentile() * 100);
             addon = " (Pan " + panCancerPercentile;
             String cancerType = evaluation.cancerType();
-            if (cancerType != null && !cancerType.equals(CohortConstants.COHORT_OTHER) && !cancerType.equals(CohortConstants.COHORT_UNKNOWN)) {
+            if (cancerType != null && !cancerType.equals(CohortConstants.COHORT_OTHER)
+                    && !cancerType.equals(CohortConstants.COHORT_UNKNOWN)) {
                 Double percentile = evaluation.cancerTypePercentile();
                 String cancerTypePercentile = percentile != null ? PERCENTAGE.format(evaluation.cancerTypePercentile() * 100) : "NA";
                 addon = addon + " | " + evaluation.cancerType() + " " + cancerTypePercentile;
@@ -362,24 +365,29 @@ public class FrontPageChapter implements ReportChapter {
 
     @NotNull
     private static String treatmentString(@NotNull List<ProtectEvidence> evidences, boolean requireOnLabel) {
-        Set<EvidenceLevel> levels = Sets.newTreeSet(Comparator.naturalOrder());
+        Set<String> levels = Sets.newTreeSet(Comparator.naturalOrder());
         Set<String> treatments = Sets.newHashSet();
         for (ProtectEvidence evidence : evidences) {
             if (evidence.onLabel() == requireOnLabel) {
                 treatments.add(evidence.treatment());
-                levels.add(evidence.level());
+                levels.add(evidence.level().toString());
             }
         }
 
         if (treatments.isEmpty()) {
             return NONE;
         } else {
-            StringJoiner joiner = new StringJoiner(", ");
-            for (EvidenceLevel level : levels) {
-                joiner.add(level.toString());
-            }
-
-            return treatments.size() + " (" + joiner.toString() + ")";
+            return treatments.size() + " (" + concat(levels) + ")";
         }
+    }
+
+    @NotNull
+    private static String concat(@NotNull Iterable<String> strings) {
+        StringJoiner joiner = new StringJoiner(", ");
+        for (String string : strings) {
+            joiner.add(string);
+        }
+
+        return joiner.toString();
     }
 }

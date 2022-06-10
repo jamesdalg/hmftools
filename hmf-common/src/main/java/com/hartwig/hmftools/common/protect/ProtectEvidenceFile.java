@@ -1,6 +1,5 @@
 package com.hartwig.hmftools.common.protect;
 
-import static com.hartwig.hmftools.common.sv.linx.LinxCluster.DELIMITER;
 import static com.hartwig.hmftools.common.utils.FileReaderUtils.createFieldsIndexMap;
 
 import java.io.File;
@@ -10,14 +9,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.StringJoiner;
-import java.util.stream.Collectors;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.hartwig.hmftools.common.serve.Knowledgebase;
 import com.hartwig.hmftools.common.serve.actionability.EvidenceDirection;
 import com.hartwig.hmftools.common.serve.actionability.EvidenceLevel;
-import com.hartwig.hmftools.common.utils.FileWriterUtils;
 
 import org.apache.logging.log4j.util.Strings;
 import org.jetbrains.annotations.NotNull;
@@ -26,11 +24,11 @@ import org.jetbrains.annotations.Nullable;
 public final class ProtectEvidenceFile {
 
     private static final String EXTENSION = ".protect.tsv";
-    private static final String FIELD_DELIMITER = "\t";
 
-    private static final String SUBFIELD_DELIMITER = ",";
-    private static final String SOURCE_SUBFIELD_ITEM_DELIMITER = "|";
-    private static final String SOURCE_SUBFIELD_DELIMITER = ";";
+    private static final String FIELD_DELIMITER = "\t";
+    private static final String SOURCES_DELIMITER = ";";
+    private static final String SOURCES_ITEM_DELIMITER = "|";
+    private static final String SOURCES_ITEM_URL_DELIMITER = ",";
 
     private ProtectEvidenceFile() {
     }
@@ -40,10 +38,12 @@ public final class ProtectEvidenceFile {
         return basePath + File.separator + sample + EXTENSION;
     }
 
-    public static void write(@NotNull String file, @NotNull List<ProtectEvidence> evidence) throws IOException {
+    public static void write(@NotNull String file, @NotNull List<ProtectEvidence> evidences) throws IOException {
         List<String> lines = Lists.newArrayList();
         lines.add(header());
-        lines.addAll(evidence.stream().map(ProtectEvidenceFile::toLine).collect(Collectors.toList()));
+        for (ProtectEvidence evidence : evidences) {
+            lines.add(toLine(evidence));
+        }
         Files.write(new File(file).toPath(), lines);
     }
 
@@ -52,7 +52,7 @@ public final class ProtectEvidenceFile {
         List<ProtectEvidence> evidence = Lists.newArrayList();
         List<String> lines = Files.readAllLines(new File(file).toPath());
 
-        Map<String, Integer> fields = createFieldsIndexMap(lines.get(0), DELIMITER);
+        Map<String, Integer> fields = createFieldsIndexMap(lines.get(0), FIELD_DELIMITER);
         for (String line : lines.subList(1, lines.size())) {
             evidence.add(fromLine(fields, line));
         }
@@ -79,8 +79,8 @@ public final class ProtectEvidenceFile {
     @NotNull
     private static String toLine(@NotNull ProtectEvidence evidence) {
         return new StringJoiner(FIELD_DELIMITER).add(nullToEmpty(evidence.gene()))
-                .add(evidence.transcript())
-                .add(String.valueOf(evidence.isCanonical()))
+                .add(nullToEmpty(evidence.transcript()))
+                .add(nullToEmpty(evidence.isCanonical()))
                 .add(evidence.event())
                 .add(nullToEmpty(evidence.eventIsHighDriver()))
                 .add(String.valueOf(evidence.germline()))
@@ -89,8 +89,84 @@ public final class ProtectEvidenceFile {
                 .add(String.valueOf(evidence.onLabel()))
                 .add(evidence.level().toString())
                 .add(evidence.direction().toString())
-                .add(toData(evidence.protectSources()))
+                .add(sourcesToString(evidence.sources()))
                 .toString();
+    }
+
+    @NotNull
+    private static ProtectEvidence fromLine(@NotNull Map<String, Integer> fields, @NotNull String line) {
+        String[] values = line.split(FIELD_DELIMITER, -1);
+
+        return ImmutableProtectEvidence.builder()
+                .gene(emptyToNullString(values[fields.get("gene")]))
+                .transcript(emptyToNullString(values[fields.get("transcript")]))
+                .isCanonical(emptyToNullBoolean(values[fields.get("isCanonical")]))
+                .event(values[fields.get("event")])
+                .eventIsHighDriver(emptyToNullBoolean(values[fields.get("eventIsHighDriver")]))
+                .germline(Boolean.parseBoolean(values[fields.get("germline")]))
+                .reported(Boolean.parseBoolean(values[fields.get("reported")]))
+                .treatment(values[fields.get("treatment")])
+                .onLabel(Boolean.parseBoolean(values[fields.get("onLabel")]))
+                .level(EvidenceLevel.valueOf(values[fields.get("level")]))
+                .direction(EvidenceDirection.valueOf(values[fields.get("direction")]))
+                .sources(stringToSources(values[fields.get("sources")]))
+                .build();
+    }
+
+    @NotNull
+    @VisibleForTesting
+    static String sourcesToString(@NotNull Iterable<ProtectSource> sources) {
+        StringJoiner main = new StringJoiner(SOURCES_DELIMITER);
+        for (ProtectSource source : sources) {
+            StringJoiner joiner = new StringJoiner(SOURCES_ITEM_DELIMITER);
+            joiner.add(source.name().toString());
+            joiner.add(source.sourceEvent());
+
+            StringJoiner sourceUrls = new StringJoiner(SOURCES_ITEM_URL_DELIMITER);
+            for (String url : source.sourceUrls()) {
+                sourceUrls.add(url);
+            }
+            joiner.add(sourceUrls.toString());
+            joiner.add(source.evidenceType().toString());
+            joiner.add(nullToEmpty(source.rangeRank()));
+
+            StringJoiner evidenceUrls = new StringJoiner(SOURCES_ITEM_URL_DELIMITER);
+            for (String url : source.evidenceUrls()) {
+                evidenceUrls.add(url);
+            }
+            joiner.add(evidenceUrls.toString());
+
+            main.add(joiner.toString());
+        }
+
+        return main.toString();
+    }
+
+    @NotNull
+    @VisibleForTesting
+    static Set<ProtectSource> stringToSources(@NotNull String sourcesString) {
+        Set<ProtectSource> sources = Sets.newHashSet();
+        for (String entry : sourcesString.split(SOURCES_DELIMITER)) {
+            String[] items = entry.split("\\" + SOURCES_ITEM_DELIMITER, -1);
+
+            sources.add(ImmutableProtectSource.builder()
+                    .name(Knowledgebase.lookupKnowledgebase(items[0]))
+                    .sourceEvent(items[1])
+                    .sourceUrls(urlsToSet(items[2]))
+                    .evidenceType(ProtectEvidenceType.valueOf(items[3]))
+                    .rangeRank(emptyToNullInteger(items[4]))
+                    .evidenceUrls(urlsToSet(items[5]))
+                    .build());
+        }
+        return sources;
+    }
+
+    @NotNull
+    private static Set<String> urlsToSet(@NotNull String urls) {
+        if (urls.isEmpty()) {
+            return Sets.newHashSet();
+        }
+        return Sets.newHashSet(urls.split(SOURCES_ITEM_URL_DELIMITER));
     }
 
     @NotNull
@@ -98,96 +174,14 @@ public final class ProtectEvidenceFile {
         return booleanValue != null ? Boolean.toString(booleanValue) : Strings.EMPTY;
     }
 
+    @Nullable
+    private static Boolean emptyToNullBoolean(@NotNull String value) {
+        return !value.isEmpty() ? Boolean.parseBoolean(value) : null;
+    }
+
     @NotNull
     private static String nullToEmpty(@Nullable String string) {
         return string != null ? string : Strings.EMPTY;
-    }
-
-    public static Set<ProtectSource> fromData(final String data) {
-        Set<ProtectSource> protectSources = Sets.newHashSet();
-        String[] dataEntries = data.split(SOURCE_SUBFIELD_DELIMITER);
-        for (String entry : dataEntries) {
-            String[] items = entry.split("\\" + SOURCE_SUBFIELD_ITEM_DELIMITER, -1);
-            String[] urls = items[2].split(SUBFIELD_DELIMITER);
-            Set<String> urlSet = Sets.newHashSet();
-
-            for (String url : urls) {
-                urlSet.add(url);
-            }
-
-            String[] urlsEvidence = items[5].split(SUBFIELD_DELIMITER);
-            Set<String> urlSetEvidence = Sets.newHashSet();
-            for (String url : urlsEvidence) {
-                urlSetEvidence.add(url);
-            }
-
-            protectSources.add(ImmutableProtectSource.builder()
-                    .source(Knowledgebase.lookupKnowledgebase(items[0]))
-                    .sourceEvent(items[1])
-                    .sourceUrls(urlSet.stream().sorted().collect(Collectors.toList()))
-                    .evidenceType(ProtectEvidenceType.valueOf(items[3]))
-                    .rangeRank(emptyToNullInteger(items[4] == null ? Strings.EMPTY : items[4]))
-                    .evidenceUrls(urlSetEvidence)
-                    .build());
-        }
-        return protectSources;
-    }
-
-    public static String toData(final Set<ProtectSource> protectSources) {
-        StringBuilder sb = new StringBuilder();
-        for (ProtectSource source : protectSources) {
-
-            StringJoiner urls = new StringJoiner(SUBFIELD_DELIMITER);
-            StringJoiner evidenceUrls = new StringJoiner(SUBFIELD_DELIMITER);
-            sb.append(source.source().technicalDisplay()).append(SOURCE_SUBFIELD_ITEM_DELIMITER);
-            sb.append(source.sourceEvent()).append(SOURCE_SUBFIELD_ITEM_DELIMITER);
-            for (String sourceUrl : source.sourceUrls()) {
-                urls.add(sourceUrl);
-            }
-            sb.append(urls).append(SOURCE_SUBFIELD_ITEM_DELIMITER);
-            sb.append(source.evidenceType()).append(SOURCE_SUBFIELD_ITEM_DELIMITER);
-            sb.append(source.rangeRank() == null ? Strings.EMPTY : String.valueOf(source.rangeRank()))
-                    .append(SOURCE_SUBFIELD_ITEM_DELIMITER);
-
-            for (String url : source.evidenceUrls()) {
-                evidenceUrls.add(url);
-            }
-
-            sb.append(evidenceUrls).append(SOURCE_SUBFIELD_ITEM_DELIMITER);
-            sb.append(SOURCE_SUBFIELD_DELIMITER);
-        }
-
-        return sb.toString();
-    }
-
-    @NotNull
-    private static ProtectEvidence fromLine(@NotNull Map<String, Integer> fields, @NotNull String line) {
-        String[] values = line.split(FIELD_DELIMITER, -1);
-
-        String eventIsHighDriverField = values[fields.get("eventIsHighDriver")];
-        Boolean eventIsHighDriver = !eventIsHighDriverField.isEmpty() ? Boolean.parseBoolean(eventIsHighDriverField) : null;
-
-        String eventIsCanonicaField = values[fields.get("isCanonical")];
-        Boolean isCanonical = !eventIsCanonicaField.isEmpty() ? Boolean.parseBoolean(eventIsCanonicaField) : null;
-
-        String transcriptField = values[fields.get("transcript")];
-        String transcript = !transcriptField.isEmpty() ? transcriptField : Strings.EMPTY;
-
-        Set<ProtectSource> sources = fromData(values[fields.get("sources")]);
-        return ImmutableProtectEvidence.builder()
-                .gene(emptyToNullString(values[fields.get("gene")]))
-                .transcript(emptyToNullString(transcript))
-                .isCanonical(isCanonical)
-                .event(values[fields.get("event")])
-                .eventIsHighDriver(eventIsHighDriver)
-                .germline(Boolean.parseBoolean(values[fields.get("germline")]))
-                .reported(Boolean.parseBoolean(values[fields.get("reported")]))
-                .treatment(values[fields.get("treatment")])
-                .onLabel(Boolean.parseBoolean(values[fields.get("onLabel")]))
-                .level(EvidenceLevel.valueOf(values[fields.get("level")]))
-                .direction(EvidenceDirection.valueOf(values[fields.get("direction")]))
-                .protectSources(sources)
-                .build();
     }
 
     @Nullable
@@ -195,8 +189,13 @@ public final class ProtectEvidenceFile {
         return !value.isEmpty() ? value : null;
     }
 
+    @NotNull
+    private static String nullToEmpty(@Nullable Integer integer) {
+        return integer != null ? String.valueOf(integer) : Strings.EMPTY;
+    }
+
     @Nullable
     private static Integer emptyToNullInteger(@NotNull String value) {
-        return !value.isEmpty() ? Integer.valueOf(value) : null;
+        return !value.isEmpty() ? Integer.parseInt(value) : null;
     }
 }

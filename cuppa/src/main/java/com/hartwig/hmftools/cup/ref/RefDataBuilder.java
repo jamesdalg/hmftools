@@ -7,6 +7,7 @@ import static com.hartwig.hmftools.cup.CuppaConfig.classifierEnabled;
 
 import java.util.List;
 
+import com.hartwig.hmftools.cup.common.NoiseRefCache;
 import com.hartwig.hmftools.cup.common.SampleDataCache;
 import com.hartwig.hmftools.cup.feature.RefFeatures;
 import com.hartwig.hmftools.cup.rna.RefAltSpliceJunctions;
@@ -41,6 +42,7 @@ public class RefDataBuilder
 
         loadSampleData(cmd);
 
+
         mClassifiers = Lists.newArrayList();
 
         // build / load traits first since some subsequent classifiers use its data (eg purity & ploidy)
@@ -54,13 +56,13 @@ public class RefDataBuilder
             mClassifiers.add(new RefSvData(mConfig, mSampleDataCache));
 
         if(RefFeatures.requiresBuild(mConfig))
-            mClassifiers.add(new RefFeatures(mConfig, mSampleDataCache));
+            mClassifiers.add(new RefFeatures(mConfig, mSampleDataCache, cmd));
 
         if(RefGeneExpression.requiresBuild(mConfig))
             mClassifiers.add(new RefGeneExpression(mConfig, mSampleDataCache, cmd));
 
         if(RefAltSpliceJunctions.requiresBuild(mConfig))
-            mClassifiers.add(new RefAltSpliceJunctions(mConfig, mSampleDataCache));
+            mClassifiers.add(new RefAltSpliceJunctions(mConfig, mSampleDataCache, cmd));
     }
 
     private void loadSampleData(final CommandLine cmd)
@@ -88,6 +90,8 @@ public class RefDataBuilder
 
             classifier.buildRefDataSets();
         }
+
+        mConfig.NoiseAdjustments.writeNoiseAdjustments();
 
         CUP_LOGGER.info("CUP ref data building complete");
     }

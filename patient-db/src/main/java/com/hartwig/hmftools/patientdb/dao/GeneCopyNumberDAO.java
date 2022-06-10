@@ -1,6 +1,7 @@
 package com.hartwig.hmftools.patientdb.dao;
 
 import static com.hartwig.hmftools.patientdb.dao.DatabaseUtil.DB_BATCH_INSERT_SIZE;
+import static com.hartwig.hmftools.patientdb.dao.DatabaseUtil.checkStringLength;
 import static com.hartwig.hmftools.patientdb.database.hmfpatients.Tables.GENECOPYNUMBER;
 import static com.hartwig.hmftools.patientdb.database.hmfpatients.Tables.GERMLINEDELETION;
 import static com.hartwig.hmftools.patientdb.database.hmfpatients.tables.Copynumber.COPYNUMBER;
@@ -19,7 +20,7 @@ import com.hartwig.hmftools.common.purple.segment.SegmentSupport;
 
 import org.jetbrains.annotations.NotNull;
 import org.jooq.DSLContext;
-import org.jooq.InsertValuesStep17;
+import org.jooq.InsertValuesStep18;
 import org.jooq.InsertValuesStep19;
 import org.jooq.Record;
 import org.jooq.Result;
@@ -138,10 +139,11 @@ class GeneCopyNumberDAO
         Timestamp timestamp = new Timestamp(new Date().getTime());
         deleteGermlineDeletionsForSample(sample);
 
-        InsertValuesStep17 inserter = context.insertInto(GERMLINEDELETION,
+        InsertValuesStep18 inserter = context.insertInto(GERMLINEDELETION,
                 GERMLINEDELETION.SAMPLEID,
                 GERMLINEDELETION.GENE,
                 GERMLINEDELETION.CHROMOSOME,
+                GERMLINEDELETION.CHROMOSOMEBAND,
                 GERMLINEDELETION.REGIONSTART,
                 GERMLINEDELETION.REGIONEND,
                 GERMLINEDELETION.DEPTHWINDOWCOUNT,
@@ -166,12 +168,13 @@ class GeneCopyNumberDAO
     }
 
     private static void addDeletionRecord(
-            final Timestamp timestamp, final InsertValuesStep17 inserter, final String sample, final GermlineDeletion deletion)
+            final Timestamp timestamp, final InsertValuesStep18 inserter, final String sample, final GermlineDeletion deletion)
     {
         inserter.values(
                 sample,
                 DatabaseUtil.checkStringLength(deletion.GeneName, GERMLINEDELETION.GENE),
                 deletion.Chromosome,
+                deletion.ChromosomeBand,
                 deletion.RegionStart,
                 deletion.RegionEnd,
                 deletion.DepthWindowCount,
@@ -182,7 +185,7 @@ class GeneCopyNumberDAO
                 deletion.TumorStatus.toString(),
                 DatabaseUtil.decimal(deletion.GermlineCopyNumber),
                 DatabaseUtil.decimal(deletion.TumorCopyNumber),
-                deletion.Filter,
+                checkStringLength(deletion.Filter, GERMLINEDELETION.FILTER),
                 deletion.CohortFrequency,
                 deletion.Reported,
                 timestamp);

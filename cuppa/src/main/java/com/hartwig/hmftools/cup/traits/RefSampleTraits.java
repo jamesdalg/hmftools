@@ -10,15 +10,21 @@ import static com.hartwig.hmftools.cup.CuppaConfig.FLD_CANCER_TYPE;
 import static com.hartwig.hmftools.cup.CuppaConfig.CUP_LOGGER;
 import static com.hartwig.hmftools.cup.CuppaConfig.DATA_DELIM;
 import static com.hartwig.hmftools.cup.CuppaConfig.SUBSET_DELIM;
+import static com.hartwig.hmftools.cup.CuppaConfig.formSamplePath;
 import static com.hartwig.hmftools.cup.CuppaRefFiles.COHORT_REF_FILE_TRAITS_DATA_FILE;
 import static com.hartwig.hmftools.cup.CuppaRefFiles.REF_FILE_GENDER_RATES;
 import static com.hartwig.hmftools.cup.CuppaRefFiles.REF_FILE_TRAIT_PERC;
 import static com.hartwig.hmftools.cup.CuppaRefFiles.REF_FILE_TRAIT_RATES;
+import static com.hartwig.hmftools.cup.CuppaRefFiles.purpleSvFile;
 import static com.hartwig.hmftools.cup.common.CategoryType.SAMPLE_TRAIT;
+import static com.hartwig.hmftools.cup.common.CupConstants.BREAST_MALE_GENDER_RATE;
+import static com.hartwig.hmftools.cup.common.CupConstants.CANCER_TYPE_BREAST;
+import static com.hartwig.hmftools.cup.common.CupConstants.CANCER_TYPE_BREAST_TRIPLE_NEGATIVE;
 import static com.hartwig.hmftools.cup.common.CupConstants.isCandidateCancerType;
 import static com.hartwig.hmftools.cup.common.SampleData.isKnownCancerType;
 import static com.hartwig.hmftools.cup.ref.RefDataConfig.GENDER_RATES;
 import static com.hartwig.hmftools.cup.ref.RefDataConfig.parseFileSet;
+import static com.hartwig.hmftools.cup.svs.SvDataLoader.loadSvDataFromFile;
 import static com.hartwig.hmftools.cup.traits.SampleTraitsDataLoader.FLD_GENDER_FEMALE;
 import static com.hartwig.hmftools.cup.traits.SampleTraitsDataLoader.FLD_GENDER_MALE;
 import static com.hartwig.hmftools.cup.traits.SampleTraitsDataLoader.GENDER_FEMALE_INDEX;
@@ -37,7 +43,11 @@ import java.util.stream.Collectors;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.hartwig.hmftools.common.purple.Gender;
+import com.hartwig.hmftools.common.purple.purity.PurityContext;
+import com.hartwig.hmftools.common.purple.purity.PurityContextFile;
+import com.hartwig.hmftools.common.sv.linx.LinxCluster;
 import com.hartwig.hmftools.cup.common.CategoryType;
+import com.hartwig.hmftools.cup.common.SampleData;
 import com.hartwig.hmftools.cup.common.SampleDataCache;
 import com.hartwig.hmftools.cup.ref.RefDataConfig;
 import com.hartwig.hmftools.cup.ref.RefClassifier;
@@ -81,31 +91,37 @@ public class RefSampleTraits implements RefClassifier
                     mGenderRates.put(genderData[0], rates);
                 }
             }
+        }
+        else
+        {
+            // -gender_rates "Breast;1;0.1"
+            mGenderRates.put(CANCER_TYPE_BREAST, new double[] {1.0, BREAST_MALE_GENDER_RATE} );
+            mGenderRates.put(CANCER_TYPE_BREAST_TRIPLE_NEGATIVE, new double[] {1.0, BREAST_MALE_GENDER_RATE} );
+        }
 
-            // add in the default zero-prevalence ones
-            for(String cancerType : mSampleDataCache.RefCancerSampleData.keySet())
-            {
-                if(mGenderRates.containsKey(cancerType))
-                    continue;
+        // add in the default zero-prevalence ones
+        for(String cancerType : mSampleDataCache.RefCancerSampleData.keySet())
+        {
+            if(mGenderRates.containsKey(cancerType))
+                continue;
 
-                double[] rates = new double[2];
+            double[] rates = new double[2];
 
-                rates[GENDER_FEMALE_INDEX] = isCandidateCancerType(Gender.FEMALE, cancerType) ? 1 : 0;
-                rates[GENDER_MALE_INDEX] = isCandidateCancerType(Gender.MALE, cancerType) ? 1 : 0;
-                mGenderRates.put(cancerType, rates);
-            }
+            rates[GENDER_FEMALE_INDEX] = isCandidateCancerType(Gender.FEMALE, cancerType) ? 1 : 0;
+            rates[GENDER_MALE_INDEX] = isCandidateCancerType(Gender.MALE, cancerType) ? 1 : 0;
+            mGenderRates.put(cancerType, rates);
         }
     }
 
     public CategoryType categoryType() { return SAMPLE_TRAIT; }
     public static boolean requiresBuild(final RefDataConfig config)
     {
-        return !config.CohortSampleTraitsFile.isEmpty() || config.DbAccess != null;
+        return config.Categories.contains(SAMPLE_TRAIT) || !config.CohortSampleTraitsFile.isEmpty() || config.DbAccess != null;
     }
 
     public void buildRefDataSets()
     {
-        if(mConfig.CohortSampleTraitsFile.isEmpty() && mConfig.DbAccess == null)
+        if(mConfig.CohortSampleTraitsFile.isEmpty() && mConfig.DbAccess == null && mConfig.PurpleDir.isEmpty())
             return;
 
         CUP_LOGGER.info("building sample traits reference data");
@@ -117,10 +133,35 @@ public class RefSampleTraits implements RefClassifier
             final List<String> files = parseFileSet(mConfig.CohortSampleTraitsFile);
             files.forEach(x -> loadRefPurityData(x, sampleTraitsData));
         }
-        else
+        else if(mConfig.DbAccess != null)
         {
             loadTraitsFromDatabase(mConfig.DbAccess, mSampleDataCache.refSampleIds(false), sampleTraitsData);
             sampleTraitsData.values().forEach(x -> assignSampleTraitsData(x));
+        }
+        else
+        {
+            // load from per-sample files
+            for(SampleData sample : mSampleDataCache.RefSampleDataList)
+            {
+                final String purpleDataDir = formSamplePath(mConfig.PurpleDir, sample.Id);
+
+                try
+                {
+                    final PurityContext purityContext = PurityContextFile.read(purpleDataDir, sample.Id);
+
+                    // CUP_LOGGER.debug("sample({}) loading sample traits from purpleDir({})", sample.Id, purpleDataDir);
+
+                    SampleTraitsData traitsData = SampleTraitsData.from(sample.Id, purityContext, 0);
+                    assignSampleTraitsData(traitsData);
+                    sampleTraitsData.put(sample.Id, traitsData);
+                }
+                catch(Exception e)
+                {
+                    CUP_LOGGER.error("sample({}) sample traits - failed to load purity file from dir{}): {}",
+                            sample.Id, purpleDataDir, e.toString());
+                    break;
+                }
+            }
         }
 
         writeCohortData(sampleTraitsData);
@@ -242,21 +283,21 @@ public class RefSampleTraits implements RefClassifier
             return;
         }
 
-        if(!isKnownCancerType(cancerType))
-            return;
-
-        List<SampleTraitsData> traitsList = mCancerTraitsData.get(cancerType);
-        if(traitsList == null)
-        {
-            mCancerTraitsData.put(cancerType, Lists.newArrayList(traitsData));
-        }
-        else
-        {
-            traitsList.add(traitsData);
-        }
-
         // cache for other components to use
         mSampleDataCache.RefSampleTraitsData.put(traitsData.SampleId, traitsData);
+
+        if(isKnownCancerType(cancerType))
+        {
+            List<SampleTraitsData> traitsList = mCancerTraitsData.get(cancerType);
+            if(traitsList == null)
+            {
+                mCancerTraitsData.put(cancerType, Lists.newArrayList(traitsData));
+            }
+            else
+            {
+                traitsList.add(traitsData);
+            }
+        }
     }
 
     private void writeGenderRates()

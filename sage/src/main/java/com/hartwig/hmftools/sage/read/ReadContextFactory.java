@@ -1,5 +1,7 @@
 package com.hartwig.hmftools.sage.read;
 
+import static java.lang.Math.max;
+
 import static com.hartwig.hmftools.common.variant.Microhomology.expandMicrohomologyRepeats;
 import static com.hartwig.hmftools.common.variant.Microhomology.microhomologyAtDeleteFromReadSequence;
 import static com.hartwig.hmftools.common.variant.Microhomology.microhomologyAtInsert;
@@ -30,8 +32,7 @@ public class ReadContextFactory
     }
 
     public ReadContext createDelContext(
-            final String ref, int refPosition, int readIndex, final SAMRecord record,
-            final IndexedBases refBases)
+            final String ref, int refPosition, int readIndex, final SAMRecord record, final IndexedBases refBases)
     {
         int refIndex = refBases.index(refPosition);
 
@@ -39,8 +40,8 @@ public class ReadContextFactory
         final MicrohomologyContext microhomologyContextWithRepeats = expandMicrohomologyRepeats(microhomologyContext);
 
         int startIndex = microhomologyContextWithRepeats.position() - MIN_CORE_DISTANCE;
-        int length = Math.max(microhomologyContext.length(), microhomologyContextWithRepeats.length() - ref.length() + 1) + 1;
-        int endIndex = Math.max(
+        int length = max(microhomologyContext.length(), microhomologyContextWithRepeats.length() - ref.length() + 1) + 1;
+        int endIndex = max(
                 microhomologyContextWithRepeats.position() + MIN_CORE_DISTANCE, microhomologyContextWithRepeats.position() + length);
 
         final Optional<RepeatContext> refRepeatContext = RepeatContextFactory.repeats(refIndex + 1, refBases.Bases);
@@ -50,7 +51,7 @@ public class ReadContextFactory
             int repeatStartIndexInReadSpace = repeat.startIndex() - refIndex + readIndex;
             int repeatEndIndexInReadSpace = repeat.endIndex() - refIndex + readIndex;
             startIndex = Math.min(startIndex, repeatStartIndexInReadSpace - 1);
-            endIndex = Math.max(endIndex, repeatEndIndexInReadSpace + 1);
+            endIndex = max(endIndex, repeatEndIndexInReadSpace + 1);
         }
 
         final Optional<RepeatContext> readRepeatContext = RepeatContextFactory.repeats(readIndex + 1, record.getReadBases());
@@ -58,7 +59,7 @@ public class ReadContextFactory
         {
             final RepeatContext repeat = readRepeatContext.get();
             startIndex = Math.min(startIndex, repeat.startIndex() - 1);
-            endIndex = Math.max(endIndex, repeat.endIndex() + 1);
+            endIndex = max(endIndex, repeat.endIndex() + 1);
         }
 
         return ReadContext.fromReadRecord(
@@ -69,8 +70,7 @@ public class ReadContextFactory
     }
 
     public ReadContext createInsertContext(
-            final String alt, int refPosition, int readIndex,
-            final SAMRecord record, final IndexedBases refBases)
+            final String alt, int refPosition, int readIndex, final SAMRecord record, final IndexedBases refBases)
     {
         int refIndex = refBases.index(refPosition);
 
@@ -78,8 +78,8 @@ public class ReadContextFactory
         final MicrohomologyContext microhomologyContextWithRepeats = expandMicrohomologyRepeats(microhomologyContext);
 
         int startIndex = microhomologyContextWithRepeats.position() - MIN_CORE_DISTANCE;
-        int length = Math.max(microhomologyContextWithRepeats.length() + 1, alt.length());
-        int endIndex = Math.max(
+        int length = max(microhomologyContextWithRepeats.length() + 1, alt.length());
+        int endIndex = max(
                 microhomologyContextWithRepeats.position() + MIN_CORE_DISTANCE, microhomologyContextWithRepeats.position() + length);
 
         final Optional<RepeatContext> refRepeatContext = RepeatContextFactory.repeats(refIndex + 1, refBases.Bases);
@@ -89,7 +89,7 @@ public class ReadContextFactory
             int repeatStartIndexInReadSpace = repeat.startIndex() - refIndex + readIndex;
             int repeatEndIndexInReadSpace = repeat.endIndex() - refIndex + readIndex;
             startIndex = Math.min(startIndex, repeatStartIndexInReadSpace - 1);
-            endIndex = Math.max(endIndex, repeatEndIndexInReadSpace + 1);
+            endIndex = max(endIndex, repeatEndIndexInReadSpace + 1);
         }
 
         final Optional<RepeatContext> readRepeatContext = RepeatContextFactory.repeats(readIndex + 1, record.getReadBases());
@@ -97,8 +97,11 @@ public class ReadContextFactory
         {
             final RepeatContext repeat = readRepeatContext.get();
             startIndex = Math.min(startIndex, repeat.startIndex() - 1);
-            endIndex = Math.max(endIndex, repeat.endIndex() + 1);
+            endIndex = max(endIndex, repeat.endIndex() + 1);
         }
+
+        // ensure that MH hasn't reduced the right core index too much
+        endIndex = max(endIndex, readIndex + alt.length() - 1 + MIN_CORE_DISTANCE);
 
         return ReadContext.fromReadRecord(
                 microhomologyContext.toString(),
@@ -128,7 +131,7 @@ public class ReadContextFactory
             int repeatStartIndexInReadSpace = repeat.startIndex() - refIndex + readIndex;
             int repeatEndIndexInReadSpace = repeat.endIndex() - refIndex + readIndex;
             startIndex = Math.min(startIndex, repeatStartIndexInReadSpace - 1);
-            endIndex = Math.max(endIndex, repeatEndIndexInReadSpace + 1);
+            endIndex = max(endIndex, repeatEndIndexInReadSpace + 1);
         }
 
         final Optional<RepeatContext> refPostRepeatContext = RepeatContextFactory.repeats(refIndex + length, refBases.Bases);
@@ -138,7 +141,7 @@ public class ReadContextFactory
             int repeatStartIndexInReadSpace = repeat.startIndex() - refIndex + readIndex;
             int repeatEndIndexInReadSpace = repeat.endIndex() - refIndex + readIndex;
             startIndex = Math.min(startIndex, repeatStartIndexInReadSpace - 1);
-            endIndex = Math.max(endIndex, repeatEndIndexInReadSpace + 1);
+            endIndex = max(endIndex, repeatEndIndexInReadSpace + 1);
         }
 
         final Optional<RepeatContext> readRepeatContext = RepeatContextFactory.repeats(readIndex, record.getReadBases());
@@ -146,7 +149,7 @@ public class ReadContextFactory
         {
             final RepeatContext repeat = readRepeatContext.get();
             startIndex = Math.min(startIndex, repeat.startIndex() - 1);
-            endIndex = Math.max(endIndex, repeat.endIndex() + 1);
+            endIndex = max(endIndex, repeat.endIndex() + 1);
         }
 
         return ReadContext.fromReadRecord(

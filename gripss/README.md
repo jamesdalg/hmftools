@@ -11,6 +11,7 @@ Repeat masker annotations must be included in the GRIDSS output before running G
 java -jar gripss.jar \
    -sample SAMPLE_T \
    -reference SAMPLE_N \
+   -ref_genome_version 37 \
    -ref_genome /path/to/Homo_sapiens_assembly.fasta \
    -pon_sgl_file /path/to/gridss_pon_single_breakend.bed \
    -pon_sv_file /path/to/gridss_pon_breakpoint.bedpe \
@@ -164,6 +165,7 @@ Note that for DSB and hotspot rescue, neither the rescued variant nor the rescui
 
 
 ## Version History and Download Links
+- [2.1](https://github.com/hartwigmedical/hmftools/releases/tag/gripss-v2.1)
 - [2.0](https://github.com/hartwigmedical/hmftools/releases/tag/gripss-v2.0)
 - [1.12](https://github.com/hartwigmedical/hmftools/releases/tag/gripss-v1.12)
 - [1.11](https://github.com/hartwigmedical/hmftools/releases/tag/gripss-v1.11)

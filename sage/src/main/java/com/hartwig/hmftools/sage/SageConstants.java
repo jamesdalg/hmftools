@@ -7,7 +7,6 @@ public class SageConstants
     public static final int DEFAULT_MIN_MAP_QUALITY = 10;
     public static final int DEFAULT_MAX_READ_DEPTH = 1000;
     public static final int DEFAULT_MAX_READ_DEPTH_PANEL = 100_000;
-    public static final int DEFAULT_MAX_REALIGNMENT_DEPTH = 1000;
     public static final int DEFAULT_SLICE_SIZE = 100_000;
 
     public static final int DEFAULT_READ_CONTEXT_FLANK_SIZE = 10;
@@ -24,9 +23,11 @@ public class SageConstants
     public static final int DEFAULT_BQR_MIN_MAP_QUAL = 10;
 
     public static final int MATCHING_BASE_QUALITY = 20;
+    public static final int CORE_LOW_QUAL_MISMATCH_BASE_LENGTH = 20;
     public static final double SC_READ_EVENTS_FACTOR = 12;
 
     public static final int SC_INSERT_MIN_FLANK_LENGTH = 10;
+    public static final int SC_INSERT_MIN_LENGTH = 5;
 
     public static final int NORMAL_RAW_ALT_BQ_MAX = 25;
 
@@ -41,6 +42,7 @@ public class SageConstants
 
     public static final double HOTSPOT_MIN_TUMOR_VAF_SKIP_QUAL = 0.08;
     public static final int HOTSPOT_MIN_TUMOR_ALT_SUPPORT_SKIP_QUAL = 8;
+    public static final int HOTSPOT_MIN_RAW_ALT_BASE_QUAL = 150;
 
     public static final SoftFilterConfig DEFAULT_HOTSPOT_FILTER = new SoftFilterConfig(70, 0.005,
             0, 0, 0.1, 0.5);

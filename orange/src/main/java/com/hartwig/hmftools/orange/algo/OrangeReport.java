@@ -8,11 +8,14 @@ import java.util.Set;
 import com.hartwig.hmftools.common.chord.ChordAnalysis;
 import com.hartwig.hmftools.common.cuppa.CuppaData;
 import com.hartwig.hmftools.common.doid.DoidNode;
+import com.hartwig.hmftools.common.genome.refgenome.RefGenomeVersion;
+import com.hartwig.hmftools.common.lilac.LilacData;
 import com.hartwig.hmftools.common.linx.LinxData;
 import com.hartwig.hmftools.common.peach.PeachGenotype;
 import com.hartwig.hmftools.common.protect.ProtectEvidence;
 import com.hartwig.hmftools.common.purple.PurpleData;
 import com.hartwig.hmftools.common.virus.VirusInterpreterData;
+import com.hartwig.hmftools.orange.algo.isofox.IsofoxInterpretedData;
 import com.hartwig.hmftools.orange.cohort.datamodel.Evaluation;
 import com.hartwig.hmftools.orange.cohort.percentile.PercentileType;
 
@@ -33,6 +36,9 @@ public abstract class OrangeReport {
     @NotNull
     public abstract Set<DoidNode> configuredPrimaryTumor();
 
+    @NotNull
+    public abstract RefGenomeVersion refGenomeVersion();
+
     @Nullable
     public abstract String platinumVersion();
 
@@ -50,6 +56,12 @@ public abstract class OrangeReport {
 
     @NotNull
     public abstract LinxData linx();
+
+    @Nullable
+    public abstract IsofoxInterpretedData isofox();
+
+    @NotNull
+    public abstract LilacData lilac();
 
     @NotNull
     public abstract VirusInterpreterData virusInterpreter();

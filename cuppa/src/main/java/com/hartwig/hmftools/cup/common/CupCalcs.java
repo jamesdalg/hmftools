@@ -5,12 +5,12 @@ import static java.lang.Math.min;
 import static java.lang.Math.pow;
 
 import static com.hartwig.hmftools.common.stats.Percentiles.getPercentile;
-import static com.hartwig.hmftools.cup.common.CategoryType.CLASSIFIER;
 import static com.hartwig.hmftools.cup.common.CategoryType.COMBINED;
 import static com.hartwig.hmftools.cup.common.ClassifierType.FEATURE;
 import static com.hartwig.hmftools.cup.common.ClassifierType.applyMinScore;
 import static com.hartwig.hmftools.cup.common.CupConstants.FEATURE_DAMPEN_FACTOR;
 import static com.hartwig.hmftools.cup.common.CupConstants.MIN_CLASSIFIER_SCORE;
+import static com.hartwig.hmftools.cup.common.ResultType.CLASSIFIER;
 import static com.hartwig.hmftools.cup.common.ResultType.LIKELIHOOD;
 import static com.hartwig.hmftools.cup.common.SampleResult.checkIsValidCancerType;
 
@@ -92,7 +92,6 @@ public class CupCalcs
 
         final List<SampleResult> prevalenceResults = allResults.stream()
                 .filter(x -> x.Result == LIKELIHOOD)
-                .filter(x -> x.Category != CLASSIFIER)
                 .collect(Collectors.toList());
 
         if(prevalenceResults.isEmpty())
@@ -121,7 +120,7 @@ public class CupCalcs
         if(purgeContributors)
             prevalenceResults.forEach(x -> allResults.remove(x));
 
-        return new SampleResult(sample.Id, CLASSIFIER, LIKELIHOOD, FEATURE.toString(), "", cancerPrevalenceValues);
+        return new SampleResult(sample.Id, CategoryType.FEATURE, CLASSIFIER, FEATURE.toString(), "", cancerPrevalenceValues);
     }
 
     public static void convertToPercentages(final Map<String,Double> dataMap)
@@ -174,7 +173,7 @@ public class CupCalcs
     {
         // combined a set of classifier into a single new combined result
         final List<SampleResult> classifierResults = results.stream()
-                .filter(x -> x.Category == CLASSIFIER)
+                .filter(x -> x.Result == CLASSIFIER && x.Category != COMBINED)
                 .collect(Collectors.toList());
 
         if(classifierResults.size() == 1)
@@ -207,7 +206,7 @@ public class CupCalcs
         dampenProbabilities(cancerTypeValues, dampenFactor);
         convertToPercentages(cancerTypeValues);
 
-        return new SampleResult(sample.Id, COMBINED, LIKELIHOOD, dataType, "", cancerTypeValues);
+        return new SampleResult(sample.Id, COMBINED, CLASSIFIER, dataType, "", cancerTypeValues);
     }
 
     public static double[] adjustRefCounts(final double[] refCounts, final double[] sampleCounts, final double sampleFactor)
@@ -221,5 +220,4 @@ public class CupCalcs
 
         return adjustedCounts;
     }
-
 }

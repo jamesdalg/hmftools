@@ -4,12 +4,14 @@ import java.io.IOException;
 import java.util.Set;
 
 import com.google.common.collect.Sets;
+import com.hartwig.hmftools.common.genome.refgenome.RefGenomeVersion;
 import com.hartwig.hmftools.common.serve.actionability.EvidenceLevel;
 import com.hartwig.hmftools.orange.report.ImmutableReportConfig;
 import com.hartwig.hmftools.orange.report.ReportConfig;
 import com.hartwig.hmftools.orange.util.Config;
 
 import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.logging.log4j.Level;
@@ -32,12 +34,15 @@ public interface OrangeConfig {
     String TUMOR_SAMPLE_ID = "tumor_sample_id";
     String REFERENCE_SAMPLE_ID = "reference_sample_id";
     String PRIMARY_TUMOR_DOIDS = "primary_tumor_doids";
+    String REF_GENOME_VERSION = "ref_genome_version";
     String OUTPUT_DIRECTORY = "output_dir";
 
     // Input files used by the algorithm
     String DOID_JSON = "doid_json";
     String COHORT_MAPPING_TSV = "cohort_mapping_tsv";
     String COHORT_PERCENTILES_TSV = "cohort_percentiles_tsv";
+    String DRIVER_GENE_PANEL_TSV = "driver_gene_panel_tsv";
+    String KNOWN_FUSION_FILE = "known_fusion_file";
 
     // Files containing the actual genomic results for this sample.
     String PIPELINE_VERSION_FILE = "pipeline_version_file";
@@ -55,17 +60,21 @@ public interface OrangeConfig {
     String PURPLE_GERMLINE_DRIVER_CATALOG_TSV = "purple_germline_driver_catalog_tsv";
     String PURPLE_SOMATIC_VARIANT_VCF = "purple_somatic_variant_vcf";
     String PURPLE_GERMLINE_VARIANT_VCF = "purple_germline_variant_vcf";
+    String PURPLE_GERMLINE_DELETION_TSV = "purple_germline_deletion_tsv";
     String PURPLE_PLOT_DIRECTORY = "purple_plot_directory";
     String LINX_FUSION_TSV = "linx_fusion_tsv";
     String LINX_BREAKEND_TSV = "linx_breakend_tsv";
     String LINX_DRIVER_CATALOG_TSV = "linx_driver_catalog_tsv";
     String LINX_DRIVER_TSV = "linx_driver_tsv";
+    String LINX_GERMLINE_DISRUPTION_TSV = "linx_germline_disruption_tsv";
     String LINX_PLOT_DIRECTORY = "linx_plot_directory";
+    String LILAC_RESULT_CSV = "lilac_result_csv";
+    String LILAC_QC_CSV = "lilac_qc_csv";
+    String ANNOTATED_VIRUS_TSV = "annotated_virus_tsv";
     String CHORD_PREDICTION_TXT = "chord_prediction_txt";
     String CUPPA_RESULT_CSV = "cuppa_result_csv";
     String CUPPA_SUMMARY_PLOT = "cuppa_summary_plot";
     String CUPPA_FEATURE_PLOT = "cuppa_feature_plot";
-    String ANNOTATED_VIRUS_TSV = "annotated_virus_tsv";
     String PEACH_GENOTYPE_TSV = "peach_genotype_tsv";
     String PROTECT_EVIDENCE_TSV = "protect_evidence_tsv";
 
@@ -81,11 +90,14 @@ public interface OrangeConfig {
         options.addOption(TUMOR_SAMPLE_ID, true, "The sample ID for which ORANGE will run.");
         options.addOption(REFERENCE_SAMPLE_ID, true, "(Optional) The reference sample of the tumor sample for which ORANGE will run.");
         options.addOption(PRIMARY_TUMOR_DOIDS, true, "A semicolon-separated list of DOIDs representing the primary tumor of patient.");
+        options.addOption(REF_GENOME_VERSION, true, "Ref genome version used in analysis (37 or 38)");
         options.addOption(OUTPUT_DIRECTORY, true, "Path to where the ORANGE output data will be written to.");
 
         options.addOption(DOID_JSON, true, "Path to JSON file containing the full DOID tree.");
         options.addOption(COHORT_MAPPING_TSV, true, "Path to cohort mapping TSV.");
         options.addOption(COHORT_PERCENTILES_TSV, true, "Path to cohort percentiles TSV.");
+        options.addOption(DRIVER_GENE_PANEL_TSV, true, "Path to the driver gene panel TSV.");
+        options.addOption(KNOWN_FUSION_FILE, true, "Path to the known fusion file.");
 
         options.addOption(PIPELINE_VERSION_FILE, true, "Path towards the pipeline version file.");
         options.addOption(REF_SAMPLE_WGS_METRICS_FILE, true, "Path towards the ref sample WGS metrics file.");
@@ -102,23 +114,31 @@ public interface OrangeConfig {
         options.addOption(PURPLE_GERMLINE_DRIVER_CATALOG_TSV, true, "Path towards the purple germline driver catalog TSV.");
         options.addOption(PURPLE_SOMATIC_VARIANT_VCF, true, "Path towards the purple somatic variant VCF.");
         options.addOption(PURPLE_GERMLINE_VARIANT_VCF, true, "Path towards the purple germline variant VCF.");
+        options.addOption(PURPLE_GERMLINE_DELETION_TSV, true, "Path towards the purple germline deletion TSV.");
         options.addOption(PURPLE_PLOT_DIRECTORY, true, "Path towards the directory holding all purple plots.");
         options.addOption(LINX_FUSION_TSV, true, "Path towards the LINX fusion TSV.");
         options.addOption(LINX_BREAKEND_TSV, true, "Path towards the LINX breakend TSV.");
         options.addOption(LINX_DRIVER_CATALOG_TSV, true, "Path towards the LINX driver catalog TSV.");
         options.addOption(LINX_DRIVER_TSV, true, "Path towards the LINX driver TSV.");
+        options.addOption(LINX_GERMLINE_DISRUPTION_TSV, true, "Path towards the LINX germline disruption TSV.");
         options.addOption(LINX_PLOT_DIRECTORY, true, "Path towards the directory holding all linx plots.");
+        options.addOption(LILAC_RESULT_CSV, true, "Path towards the LILAC result CSV.");
+        options.addOption(LILAC_QC_CSV, true, "Path towards the LILAC QC CSV.");
+        options.addOption(ANNOTATED_VIRUS_TSV, true, "Path towards the annotated virus TSV.");
         options.addOption(CHORD_PREDICTION_TXT, true, "Path towards the CHORD prediction TXT.");
         options.addOption(CUPPA_RESULT_CSV, true, "Path towards the Cuppa result CSV.");
         options.addOption(CUPPA_SUMMARY_PLOT, true, "Path towards the Cuppa report summary plot PNG.");
         options.addOption(CUPPA_FEATURE_PLOT, true, "Path towards the Cuppa report feature plot PNG.");
-        options.addOption(ANNOTATED_VIRUS_TSV, true, "Path towards the annotated virus TSV.");
         options.addOption(PEACH_GENOTYPE_TSV, true, "Path towards the peach genotype TSV.");
         options.addOption(PROTECT_EVIDENCE_TSV, true, "Path towards the protect evidence TSV.");
 
         options.addOption(LOG_DEBUG, false, "If provided, set the log level to debug rather than default.");
         options.addOption(DISABLE_GERMLINE, false, "If provided, germline results are not added to the report");
         options.addOption(MAX_EVIDENCE_LEVEL, true, "If provided, only evidence up to provided maximum level are added to report");
+
+        for (Option rnaOption : OrangeRNAConfig.createOptions().getOptions()) {
+            options.addOption(rnaOption);
+        }
 
         return options;
     }
@@ -129,11 +149,17 @@ public interface OrangeConfig {
     @Nullable
     String referenceSampleId();
 
+    @Nullable
+    OrangeRNAConfig rnaConfig();
+
     @NotNull
     ReportConfig reportConfig();
 
     @NotNull
     Set<String> primaryTumorDoids();
+
+    @NotNull
+    RefGenomeVersion refGenomeVersion();
 
     @NotNull
     String outputDir();
@@ -146,6 +172,12 @@ public interface OrangeConfig {
 
     @NotNull
     String cohortPercentilesTsv();
+
+    @NotNull
+    String driverGenePanelTsv();
+
+    @NotNull
+    String knownFusionFile();
 
     @Nullable
     String pipelineVersionFile();
@@ -193,6 +225,9 @@ public interface OrangeConfig {
     String purpleGermlineVariantVcf();
 
     @NotNull
+    String purpleGermlineDeletionTsv();
+
+    @NotNull
     String purplePlotDirectory();
 
     @NotNull
@@ -208,7 +243,19 @@ public interface OrangeConfig {
     String linxDriverTsv();
 
     @NotNull
+    String linxGermlineDisruptionTsv();
+
+    @NotNull
     String linxPlotDirectory();
+
+    @NotNull
+    String lilacResultCsv();
+
+    @NotNull
+    String lilacQcCsv();
+
+    @NotNull
+    String annotatedVirusTsv();
 
     @NotNull
     String chordPredictionTxt();
@@ -221,9 +268,6 @@ public interface OrangeConfig {
 
     @Nullable
     String cuppaFeaturePlot();
-
-    @NotNull
-    String annotatedVirusTsv();
 
     @NotNull
     String peachGenotypeTsv();
@@ -240,9 +284,7 @@ public interface OrangeConfig {
 
         ReportConfig report = ImmutableReportConfig.builder()
                 .reportGermline(!cmd.hasOption(DISABLE_GERMLINE))
-                .maxEvidenceLevel(cmd.hasOption(MAX_EVIDENCE_LEVEL)
-                        ? EvidenceLevel.valueOf(cmd.getOptionValue(MAX_EVIDENCE_LEVEL))
-                        : null)
+                .maxEvidenceLevel(cmd.hasOption(MAX_EVIDENCE_LEVEL) ? EvidenceLevel.valueOf(cmd.getOptionValue(MAX_EVIDENCE_LEVEL)) : null)
                 .build();
 
         if (!report.reportGermline()) {
@@ -253,15 +295,24 @@ public interface OrangeConfig {
             LOGGER.info("Max reporting level configured to {}", report.maxEvidenceLevel());
         }
 
+        String refSampleId = Config.optionalValue(cmd, REFERENCE_SAMPLE_ID);
+        if (refSampleId != null) {
+            LOGGER.debug("Ref sample configured as {}", refSampleId);
+        }
+
         return ImmutableOrangeConfig.builder()
                 .tumorSampleId(Config.nonOptionalValue(cmd, TUMOR_SAMPLE_ID))
-                .referenceSampleId(Config.optionalValue(cmd, REFERENCE_SAMPLE_ID))
+                .referenceSampleId(refSampleId)
+                .rnaConfig(OrangeRNAConfig.createConfig(cmd))
                 .reportConfig(report)
                 .primaryTumorDoids(toStringSet(Config.nonOptionalValue(cmd, PRIMARY_TUMOR_DOIDS), DOID_SEPARATOR))
+                .refGenomeVersion(RefGenomeVersion.from(Config.nonOptionalValue(cmd, REF_GENOME_VERSION)))
                 .outputDir(Config.outputDir(cmd, OUTPUT_DIRECTORY))
                 .doidJsonFile(Config.nonOptionalFile(cmd, DOID_JSON))
                 .cohortMappingTsv(Config.nonOptionalFile(cmd, COHORT_MAPPING_TSV))
                 .cohortPercentilesTsv(Config.nonOptionalFile(cmd, COHORT_PERCENTILES_TSV))
+                .driverGenePanelTsv(Config.nonOptionalFile(cmd, DRIVER_GENE_PANEL_TSV))
+                .knownFusionFile(Config.nonOptionalFile(cmd, KNOWN_FUSION_FILE))
                 .pipelineVersionFile(Config.optionalValue(cmd, PIPELINE_VERSION_FILE))
                 .refSampleWGSMetricsFile(Config.nonOptionalValue(cmd, REF_SAMPLE_WGS_METRICS_FILE))
                 .refSampleFlagstatFile(Config.nonOptionalValue(cmd, REF_SAMPLE_FLAGSTAT_FILE))
@@ -277,17 +328,21 @@ public interface OrangeConfig {
                 .purpleGermlineDriverCatalogTsv(Config.nonOptionalFile(cmd, PURPLE_GERMLINE_DRIVER_CATALOG_TSV))
                 .purpleSomaticVariantVcf(Config.nonOptionalFile(cmd, PURPLE_SOMATIC_VARIANT_VCF))
                 .purpleGermlineVariantVcf(Config.nonOptionalFile(cmd, PURPLE_GERMLINE_VARIANT_VCF))
+                .purpleGermlineDeletionTsv(Config.nonOptionalFile(cmd, PURPLE_GERMLINE_DELETION_TSV))
                 .purplePlotDirectory(Config.nonOptionalDir(cmd, PURPLE_PLOT_DIRECTORY))
                 .linxFusionTsv(Config.nonOptionalFile(cmd, LINX_FUSION_TSV))
                 .linxBreakendTsv(Config.nonOptionalFile(cmd, LINX_BREAKEND_TSV))
                 .linxDriverCatalogTsv(Config.nonOptionalFile(cmd, LINX_DRIVER_CATALOG_TSV))
                 .linxDriverTsv(Config.nonOptionalFile(cmd, LINX_DRIVER_TSV))
+                .linxGermlineDisruptionTsv(Config.nonOptionalFile(cmd, LINX_GERMLINE_DISRUPTION_TSV))
                 .linxPlotDirectory(Config.nonOptionalValue(cmd, LINX_PLOT_DIRECTORY))
+                .lilacResultCsv(Config.nonOptionalFile(cmd, LILAC_RESULT_CSV))
+                .lilacQcCsv(Config.nonOptionalFile(cmd, LILAC_QC_CSV))
+                .annotatedVirusTsv(Config.nonOptionalFile(cmd, ANNOTATED_VIRUS_TSV))
                 .chordPredictionTxt(Config.nonOptionalFile(cmd, CHORD_PREDICTION_TXT))
                 .cuppaResultCsv(Config.nonOptionalFile(cmd, CUPPA_RESULT_CSV))
                 .cuppaSummaryPlot(Config.nonOptionalFile(cmd, CUPPA_SUMMARY_PLOT))
                 .cuppaFeaturePlot(Config.optionalValue(cmd, CUPPA_FEATURE_PLOT))
-                .annotatedVirusTsv(Config.nonOptionalFile(cmd, ANNOTATED_VIRUS_TSV))
                 .peachGenotypeTsv(Config.nonOptionalFile(cmd, PEACH_GENOTYPE_TSV))
                 .protectEvidenceTsv(Config.nonOptionalFile(cmd, PROTECT_EVIDENCE_TSV))
                 .build();

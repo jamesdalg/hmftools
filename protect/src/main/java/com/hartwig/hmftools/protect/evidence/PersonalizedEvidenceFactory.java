@@ -1,7 +1,6 @@
 package com.hartwig.hmftools.protect.evidence;
 
 import java.util.Set;
-import java.util.StringJoiner;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Sets;
@@ -9,12 +8,12 @@ import com.hartwig.hmftools.common.protect.ImmutableProtectEvidence;
 import com.hartwig.hmftools.common.protect.ImmutableProtectSource;
 import com.hartwig.hmftools.common.protect.ProtectEvidenceType;
 import com.hartwig.hmftools.common.protect.ProtectSource;
-import com.hartwig.hmftools.common.serve.Knowledgebase;
 import com.hartwig.hmftools.serve.actionability.ActionableEvent;
 import com.hartwig.hmftools.serve.actionability.characteristic.ActionableCharacteristic;
 import com.hartwig.hmftools.serve.actionability.fusion.ActionableFusion;
 import com.hartwig.hmftools.serve.actionability.gene.ActionableGene;
 import com.hartwig.hmftools.serve.actionability.hotspot.ActionableHotspot;
+import com.hartwig.hmftools.serve.actionability.immuno.ActionableHLA;
 import com.hartwig.hmftools.serve.actionability.range.ActionableRange;
 import com.hartwig.hmftools.serve.cancertype.CancerType;
 import com.hartwig.hmftools.serve.cancertype.CancerTypeFactory;
@@ -25,6 +24,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 public class PersonalizedEvidenceFactory {
+
     private static final Logger LOGGER = LogManager.getLogger(PersonalizedEvidenceFactory.class);
 
     @NotNull
@@ -46,48 +46,22 @@ public class PersonalizedEvidenceFactory {
 
     @NotNull
     public ImmutableProtectEvidence.Builder evidenceBuilder(@NotNull ActionableEvent actionable) {
-
-        StringJoiner sourceUrlJoiner = new StringJoiner(",");
-        for (String url : actionable.sourceUrls()) {
-            sourceUrlJoiner.add(url);
-        }
         return ImmutableProtectEvidence.builder()
-                .treatment(actionable.treatment())
-                .onLabel(determineOnlabel(actionable.applicableCancerType(), actionable.blacklistCancerTypes(), actionable.treatment()))
+                .treatment(actionable.treatment().treament())
+                .onLabel(isOnLabel(actionable.applicableCancerType(), actionable.blacklistCancerTypes(), actionable.treatment().treament()))
                 .level(actionable.level())
                 .direction(actionable.direction())
-                .protectSources(determineProtectSources(actionable));
+                .sources(Sets.newHashSet(resolveProtectSource(actionable)));
     }
 
-    @NotNull
-    public Set<ProtectSource> determineProtectSources(@NotNull ActionableEvent actionable) {
-        Set<ProtectSource> protectSources = Sets.newHashSet();
-        Knowledgebase source = actionable.source();
-        String sourceEvent = actionable.sourceEvent();
-        Set<String> sourceUrls = actionable.sourceUrls();
-        Integer rank = determineRangeRank(actionable);
-        ProtectEvidenceType evidenceType = determineEvidenceType(actionable);
-        Set<String> evidenceUrls = actionable.evidenceUrls();
-
-        ProtectSource protectSource = ImmutableProtectSource.builder()
-                .source(source)
-                .sourceEvent(sourceEvent)
-                .sourceUrls(sourceUrls)
-                .evidenceType(evidenceType)
-                .rangeRank(rank)
-                .evidenceUrls(evidenceUrls)
-                .build();
-        protectSources.add(protectSource);
-        return protectSources;
-    }
-
-    public boolean determineOnlabel(@NotNull CancerType applicableCancerType, @NotNull Set<CancerType> blacklistCancerTypes,
+    public boolean isOnLabel(@NotNull CancerType applicableCancerType, @NotNull Set<CancerType> blacklistCancerTypes,
             @NotNull String treatment) {
-        //TODO filter for blacklisting in v2.2. Should be analyzed in more depth
+        //TODO filter for blacklisting in future version. Should be analyzed in more depth
         return patientTumorDoids.contains(applicableCancerType.doid());
     }
 
-    public boolean determineBlacklistedEvidence(@NotNull Set<CancerType> blacklistCancerTypes, @NotNull String treatment) {
+    @VisibleForTesting
+    boolean determineBlacklistedEvidence(@NotNull Set<CancerType> blacklistCancerTypes, @NotNull String treatment) {
         Set<String> blacklistDoids = CancerTypeFactory.doidStrings(blacklistCancerTypes);
 
         if (!blacklistDoids.isEmpty()) {
@@ -104,6 +78,24 @@ public class PersonalizedEvidenceFactory {
         return false;
     }
 
+    @NotNull
+    private static ProtectSource resolveProtectSource(@NotNull ActionableEvent actionable) {
+        return ImmutableProtectSource.builder()
+                .name(actionable.source())
+                .sourceEvent(actionable.sourceEvent())
+                .sourceUrls(actionable.sourceUrls())
+                .evidenceType(determineEvidenceType(actionable))
+                .rangeRank(determineRangeRank(actionable))
+                .evidenceUrls(actionable.evidenceUrls())
+                .build();
+    }
+
+    @VisibleForTesting
+    @Nullable
+    static Integer determineRangeRank(@NotNull ActionableEvent actionable) {
+        return actionable instanceof ActionableRange ? ((ActionableRange) actionable).rank() : null;
+    }
+
     @VisibleForTesting
     @NotNull
     static ProtectEvidenceType determineEvidenceType(@NotNull ActionableEvent actionable) {
@@ -117,6 +109,8 @@ public class PersonalizedEvidenceFactory {
             return ProtectEvidenceType.FUSION_PAIR;
         } else if (actionable instanceof ActionableCharacteristic) {
             return fromActionableCharacteristic((ActionableCharacteristic) actionable);
+        } else if (actionable instanceof ActionableHLA) {
+            return ProtectEvidenceType.HLA;
         } else {
             throw new IllegalStateException("Unexpected actionable event detected in variant evidence: " + actionable);
         }
@@ -140,8 +134,12 @@ public class PersonalizedEvidenceFactory {
         switch (gene.event()) {
             case AMPLIFICATION:
                 return ProtectEvidenceType.AMPLIFICATION;
+            case OVER_EXPRESSION:
+                return ProtectEvidenceType.OVER_EXPRESSION;
             case DELETION:
                 return ProtectEvidenceType.DELETION;
+            case UNDER_EXPRESSION:
+                return ProtectEvidenceType.UNDER_EXPRESSION;
             case ACTIVATION:
                 return ProtectEvidenceType.ACTIVATION;
             case INACTIVATION:
@@ -176,11 +174,5 @@ public class PersonalizedEvidenceFactory {
                 throw new IllegalStateException("Unsupported tumor characteristic: " + characteristic.name());
             }
         }
-    }
-
-    @VisibleForTesting
-    @Nullable
-    static Integer determineRangeRank(@NotNull ActionableEvent actionable) {
-        return actionable instanceof ActionableRange ? ((ActionableRange) actionable).rank() : null;
     }
 }

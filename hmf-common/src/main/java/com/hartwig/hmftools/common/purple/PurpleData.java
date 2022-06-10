@@ -3,7 +3,9 @@ package com.hartwig.hmftools.common.purple;
 import java.util.List;
 
 import com.hartwig.hmftools.common.purple.cnchromosome.CnPerChromosomeArmData;
-import com.hartwig.hmftools.common.purple.copynumber.ReportableGainLoss;
+import com.hartwig.hmftools.common.purple.gene.GeneCopyNumber;
+import com.hartwig.hmftools.common.purple.gene.GermlineDeletion;
+import com.hartwig.hmftools.common.purple.interpretation.GainLoss;
 import com.hartwig.hmftools.common.purple.purity.FittedPurityMethod;
 import com.hartwig.hmftools.common.variant.ReportableVariant;
 import com.hartwig.hmftools.common.variant.SomaticVariant;
@@ -26,8 +28,6 @@ public interface PurpleData {
     @NotNull
     FittedPurityMethod fittedPurityMethod();
 
-    boolean wholeGenomeDuplication();
-
     boolean hasReliablePurity();
 
     double purity();
@@ -42,6 +42,8 @@ public interface PurpleData {
 
     double maxPloidy();
 
+    boolean wholeGenomeDuplication();
+
     double microsatelliteIndelsPerMb();
 
     @NotNull
@@ -51,10 +53,10 @@ public interface PurpleData {
 
     int tumorMutationalLoad();
 
-    int svTumorMutationalBurden();
-
     @NotNull
     TumorMutationalStatus tumorMutationalLoadStatus();
+
+    int svTumorMutationalBurden();
 
     @NotNull
     List<ReportableVariant> reportableSomaticVariants();
@@ -69,10 +71,19 @@ public interface PurpleData {
     List<SomaticVariant> unreportedGermlineVariants();
 
     @NotNull
-    List<ReportableGainLoss> reportableGainsLosses();
+    List<GainLoss> reportableSomaticGainsLosses();
 
     @NotNull
-    List<ReportableGainLoss> unreportedGainsLosses();
+    List<GainLoss> unreportedSomaticGainsLosses();
+
+    @NotNull
+    List<GermlineDeletion> reportableGermlineDeletions();
+
+    @NotNull
+    List<GermlineDeletion> unreportedGermlineDeletions();
+
+    @NotNull
+    List<GeneCopyNumber> lohGenes();
 
     @NotNull
     List<CnPerChromosomeArmData> cnPerChromosome();

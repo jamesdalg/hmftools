@@ -22,8 +22,7 @@ public abstract class ReportableVariant implements Variant {
     @NotNull
     public abstract String transcript();
 
-    @NotNull
-    public abstract Boolean isCanonical();
+    public abstract boolean isCanonical();
 
     @NotNull
     @Override
@@ -74,6 +73,12 @@ public abstract class ReportableVariant implements Variant {
 
     @Override
     public abstract int alleleReadCount();
+
+    @Nullable
+    public abstract Integer rnaAlleleReadCount();
+
+    @Nullable
+    public abstract Integer rnaTotalReadCount();
 
     public abstract double totalCopyNumber();
 
