@@ -8,6 +8,7 @@ import java.io.IOException;
 
 import com.google.gson.GsonBuilder;
 import com.hartwig.hmftools.orange.algo.OrangeReport;
+import com.hartwig.hmftools.orange.algo.util.OrangeReportModifier;
 import com.hartwig.hmftools.orange.report.chapters.ClinicalEvidenceChapter;
 import com.hartwig.hmftools.orange.report.chapters.CohortComparisonChapter;
 import com.hartwig.hmftools.orange.report.chapters.FrontPageChapter;
@@ -65,7 +66,9 @@ public class ReportWriter {
         if (writeToDisk && outputDir != null) {
             String outputFilePath = outputDir + File.separator + report.sampleId() + ".orange.json";
             LOGGER.info("Writing JSON report to {} ", outputFilePath);
-            String json = new GsonBuilder().serializeNulls().serializeSpecialFloatingPointValues().create().toJson(report);
+
+            OrangeReport reportToWrite = reportConfig.limitJsonOutput() ? OrangeReportModifier.limitAllListsToMaxOne(report) : report;
+            String json = new GsonBuilder().serializeNulls().serializeSpecialFloatingPointValues().create().toJson(reportToWrite);
             BufferedWriter writer = new BufferedWriter(new FileWriter(outputFilePath));
 
             writer.write(json);

@@ -1,6 +1,7 @@
 package com.hartwig.hmftools.serve.sources.ckb;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -8,6 +9,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.hartwig.hmftools.ckb.datamodel.CkbEntry;
 import com.hartwig.hmftools.ckb.datamodel.drug.Drug;
+import com.hartwig.hmftools.ckb.datamodel.drug.DrugClass;
 import com.hartwig.hmftools.ckb.datamodel.evidence.Evidence;
 import com.hartwig.hmftools.ckb.datamodel.reference.Reference;
 import com.hartwig.hmftools.ckb.datamodel.treatmentapproaches.RelevantTreatmentApproaches;
@@ -16,10 +18,12 @@ import com.hartwig.hmftools.common.serve.actionability.EvidenceDirection;
 import com.hartwig.hmftools.common.serve.actionability.EvidenceLevel;
 import com.hartwig.hmftools.serve.cancertype.CancerType;
 import com.hartwig.hmftools.serve.cancertype.ImmutableCancerType;
+import com.hartwig.hmftools.serve.curation.DrugClasses;
 import com.hartwig.hmftools.serve.treatment.ImmutableTreatment;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.util.Strings;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -62,7 +66,8 @@ class ActionableEntryFactory {
     }
 
     @NotNull
-    public static Set<ActionableEntry> toActionableEntries(@NotNull CkbEntry entry, @NotNull String sourceEvent) {
+    public static Set<ActionableEntry> toActionableEntries(@NotNull CkbEntry entry, @NotNull String sourceEvent,
+            @NotNull Map<String, DrugClasses> drugClassesCurations) {
         Set<ActionableEntry> actionableEntries = Sets.newHashSet();
         Set<String> drugClasses = Sets.newHashSet();
         for (Evidence evidence : evidencesWithUsableType(entry.evidences())) {
@@ -71,7 +76,21 @@ class ActionableEntryFactory {
             String doid = extractAndCurateDoid(evidence.indication().termId());
 
             for (RelevantTreatmentApproaches relevantTreatmentApproaches : evidence.relevantTreatmentApproaches()) {
-                drugClasses.add(relevantTreatmentApproaches.drugClass().drugClass());
+                DrugClass drugClass = relevantTreatmentApproaches.drugClass();
+
+                if (drugClass == null) {
+                    drugClasses.add(Strings.EMPTY);
+                } else {
+                    DrugClasses drugClassesMap = drugClassesCurations.get(drugClass.drugClass());
+                    if (drugClassesMap != null) {
+                        if (drugClass.drugClass().equals(drugClassesMap.curatedDrugClass())) {
+                            drugClasses.add(drugClassesMap.curatedDrugClass());
+                        } else {
+                            LOGGER.warn("Drug class '{}' isn't curated", drugClass.drugClass());
+                            drugClasses.add(Strings.EMPTY);
+                        }
+                    }
+                }
             }
 
             if (level != null && direction != null && doid != null) {
@@ -115,8 +134,7 @@ class ActionableEntryFactory {
                         .evidenceUrls(evidenceUrls)
                         .build());
             }
-        }
-        return actionableEntries;
+        } return actionableEntries;
     }
 
     @NotNull

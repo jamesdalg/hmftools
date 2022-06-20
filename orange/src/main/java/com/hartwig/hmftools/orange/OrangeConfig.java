@@ -1,6 +1,10 @@
 package com.hartwig.hmftools.orange;
 
 import java.io.IOException;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.Locale;
 import java.util.Set;
 
 import com.google.common.collect.Sets;
@@ -34,6 +38,7 @@ public interface OrangeConfig {
     String TUMOR_SAMPLE_ID = "tumor_sample_id";
     String REFERENCE_SAMPLE_ID = "reference_sample_id";
     String PRIMARY_TUMOR_DOIDS = "primary_tumor_doids";
+    String EXPERIMENT_DATE = "experiment_date";
     String REF_GENOME_VERSION = "ref_genome_version";
     String OUTPUT_DIRECTORY = "output_dir";
 
@@ -55,6 +60,7 @@ public interface OrangeConfig {
     String SAGE_SOMATIC_TUMOR_SAMPLE_BQR_PLOT = "sage_somatic_tumor_sample_bqr_plot";
     String PURPLE_PURITY_TSV = "purple_purity_tsv";
     String PURPLE_QC_FILE = "purple_qc_file";
+    String PURPLE_SOMATIC_COPY_NUMBER_TSV = "purple_somatic_copy_number_tsv";
     String PURPLE_GENE_COPY_NUMBER_TSV = "purple_gene_copy_number_tsv";
     String PURPLE_SOMATIC_DRIVER_CATALOG_TSV = "purple_somatic_driver_catalog_tsv";
     String PURPLE_GERMLINE_DRIVER_CATALOG_TSV = "purple_germline_driver_catalog_tsv";
@@ -62,6 +68,7 @@ public interface OrangeConfig {
     String PURPLE_GERMLINE_VARIANT_VCF = "purple_germline_variant_vcf";
     String PURPLE_GERMLINE_DELETION_TSV = "purple_germline_deletion_tsv";
     String PURPLE_PLOT_DIRECTORY = "purple_plot_directory";
+    String LINX_STRUCTURAL_VARIANT_TSV = "linx_structural_variant_tsv";
     String LINX_FUSION_TSV = "linx_fusion_tsv";
     String LINX_BREAKEND_TSV = "linx_breakend_tsv";
     String LINX_DRIVER_CATALOG_TSV = "linx_driver_catalog_tsv";
@@ -81,6 +88,7 @@ public interface OrangeConfig {
     // Some additional optional params and flags
     String DISABLE_GERMLINE = "disable_germline";
     String MAX_EVIDENCE_LEVEL = "max_evidence_level";
+    String LIMIT_JSON_OUTPUT = "limit_json_output";
     String LOG_DEBUG = "log_debug";
 
     @NotNull
@@ -90,6 +98,7 @@ public interface OrangeConfig {
         options.addOption(TUMOR_SAMPLE_ID, true, "The sample ID for which ORANGE will run.");
         options.addOption(REFERENCE_SAMPLE_ID, true, "(Optional) The reference sample of the tumor sample for which ORANGE will run.");
         options.addOption(PRIMARY_TUMOR_DOIDS, true, "A semicolon-separated list of DOIDs representing the primary tumor of patient.");
+        options.addOption(EXPERIMENT_DATE, true, "Optional, if provided represents the experiment date in YYMMDD format ");
         options.addOption(REF_GENOME_VERSION, true, "Ref genome version used in analysis (37 or 38)");
         options.addOption(OUTPUT_DIRECTORY, true, "Path to where the ORANGE output data will be written to.");
 
@@ -109,13 +118,15 @@ public interface OrangeConfig {
         options.addOption(SAGE_SOMATIC_TUMOR_SAMPLE_BQR_PLOT, true, "Path towards the SAGE somatic tumor sample BQR plot.");
         options.addOption(PURPLE_PURITY_TSV, true, "Path towards the purple purity TSV.");
         options.addOption(PURPLE_QC_FILE, true, "Path towards the purple qc file.");
-        options.addOption(PURPLE_GENE_COPY_NUMBER_TSV, true, "Path towards the purple gene copynumber TSV.");
+        options.addOption(PURPLE_SOMATIC_COPY_NUMBER_TSV, true, "Path towards the purple somatic copy number TSV.");
+        options.addOption(PURPLE_GENE_COPY_NUMBER_TSV, true, "Path towards the purple gene copy number TSV.");
         options.addOption(PURPLE_SOMATIC_DRIVER_CATALOG_TSV, true, "Path towards the purple somatic driver catalog TSV.");
         options.addOption(PURPLE_GERMLINE_DRIVER_CATALOG_TSV, true, "Path towards the purple germline driver catalog TSV.");
         options.addOption(PURPLE_SOMATIC_VARIANT_VCF, true, "Path towards the purple somatic variant VCF.");
         options.addOption(PURPLE_GERMLINE_VARIANT_VCF, true, "Path towards the purple germline variant VCF.");
         options.addOption(PURPLE_GERMLINE_DELETION_TSV, true, "Path towards the purple germline deletion TSV.");
         options.addOption(PURPLE_PLOT_DIRECTORY, true, "Path towards the directory holding all purple plots.");
+        options.addOption(LINX_STRUCTURAL_VARIANT_TSV, true, "Path towards the LINX structural variant TSV.");
         options.addOption(LINX_FUSION_TSV, true, "Path towards the LINX fusion TSV.");
         options.addOption(LINX_BREAKEND_TSV, true, "Path towards the LINX breakend TSV.");
         options.addOption(LINX_DRIVER_CATALOG_TSV, true, "Path towards the LINX driver catalog TSV.");
@@ -132,9 +143,10 @@ public interface OrangeConfig {
         options.addOption(PEACH_GENOTYPE_TSV, true, "Path towards the peach genotype TSV.");
         options.addOption(PROTECT_EVIDENCE_TSV, true, "Path towards the protect evidence TSV.");
 
-        options.addOption(LOG_DEBUG, false, "If provided, set the log level to debug rather than default.");
         options.addOption(DISABLE_GERMLINE, false, "If provided, germline results are not added to the report");
         options.addOption(MAX_EVIDENCE_LEVEL, true, "If provided, only evidence up to provided maximum level are added to report");
+        options.addOption(LOG_DEBUG, false, "If provided, set the log level to debug rather than default.");
+        options.addOption(LIMIT_JSON_OUTPUT, false, "If provided, limits the json output.");
 
         for (Option rnaOption : OrangeRNAConfig.createOptions().getOptions()) {
             options.addOption(rnaOption);
@@ -157,6 +169,9 @@ public interface OrangeConfig {
 
     @NotNull
     Set<String> primaryTumorDoids();
+
+    @NotNull
+    LocalDate experimentDate();
 
     @NotNull
     RefGenomeVersion refGenomeVersion();
@@ -210,6 +225,9 @@ public interface OrangeConfig {
     String purpleQcFile();
 
     @NotNull
+    String purpleSomaticCopyNumberTsv();
+
+    @NotNull
     String purpleGeneCopyNumberTsv();
 
     @NotNull
@@ -229,6 +247,9 @@ public interface OrangeConfig {
 
     @NotNull
     String purplePlotDirectory();
+
+    @NotNull
+    String linxStructuralVariantTsv();
 
     @NotNull
     String linxFusionTsv();
@@ -283,9 +304,14 @@ public interface OrangeConfig {
         }
 
         ReportConfig report = ImmutableReportConfig.builder()
+                .limitJsonOutput(cmd.hasOption(LIMIT_JSON_OUTPUT))
                 .reportGermline(!cmd.hasOption(DISABLE_GERMLINE))
                 .maxEvidenceLevel(cmd.hasOption(MAX_EVIDENCE_LEVEL) ? EvidenceLevel.valueOf(cmd.getOptionValue(MAX_EVIDENCE_LEVEL)) : null)
                 .build();
+
+        if (report.limitJsonOutput()) {
+            LOGGER.info("JSON limitation has been enabled.");
+        }
 
         if (!report.reportGermline()) {
             LOGGER.info("Germline reporting has been disabled");
@@ -300,12 +326,20 @@ public interface OrangeConfig {
             LOGGER.debug("Ref sample configured as {}", refSampleId);
         }
 
+        LocalDate experimentDate;
+        if (cmd.hasOption(EXPERIMENT_DATE)) {
+            experimentDate = interpretExperimentDateParam(cmd.getOptionValue(EXPERIMENT_DATE));
+        } else {
+            experimentDate = LocalDate.now();
+        }
+
         return ImmutableOrangeConfig.builder()
                 .tumorSampleId(Config.nonOptionalValue(cmd, TUMOR_SAMPLE_ID))
                 .referenceSampleId(refSampleId)
                 .rnaConfig(OrangeRNAConfig.createConfig(cmd))
                 .reportConfig(report)
                 .primaryTumorDoids(toStringSet(Config.nonOptionalValue(cmd, PRIMARY_TUMOR_DOIDS), DOID_SEPARATOR))
+                .experimentDate(experimentDate)
                 .refGenomeVersion(RefGenomeVersion.from(Config.nonOptionalValue(cmd, REF_GENOME_VERSION)))
                 .outputDir(Config.outputDir(cmd, OUTPUT_DIRECTORY))
                 .doidJsonFile(Config.nonOptionalFile(cmd, DOID_JSON))
@@ -323,6 +357,7 @@ public interface OrangeConfig {
                 .sageSomaticTumorSampleBQRPlot(Config.nonOptionalFile(cmd, SAGE_SOMATIC_TUMOR_SAMPLE_BQR_PLOT))
                 .purplePurityTsv(Config.nonOptionalFile(cmd, PURPLE_PURITY_TSV))
                 .purpleQcFile(Config.nonOptionalFile(cmd, PURPLE_QC_FILE))
+                .purpleSomaticCopyNumberTsv(Config.nonOptionalFile(cmd, PURPLE_SOMATIC_COPY_NUMBER_TSV))
                 .purpleGeneCopyNumberTsv(Config.nonOptionalFile(cmd, PURPLE_GENE_COPY_NUMBER_TSV))
                 .purpleSomaticDriverCatalogTsv(Config.nonOptionalFile(cmd, PURPLE_SOMATIC_DRIVER_CATALOG_TSV))
                 .purpleGermlineDriverCatalogTsv(Config.nonOptionalFile(cmd, PURPLE_GERMLINE_DRIVER_CATALOG_TSV))
@@ -330,6 +365,7 @@ public interface OrangeConfig {
                 .purpleGermlineVariantVcf(Config.nonOptionalFile(cmd, PURPLE_GERMLINE_VARIANT_VCF))
                 .purpleGermlineDeletionTsv(Config.nonOptionalFile(cmd, PURPLE_GERMLINE_DELETION_TSV))
                 .purplePlotDirectory(Config.nonOptionalDir(cmd, PURPLE_PLOT_DIRECTORY))
+                .linxStructuralVariantTsv(Config.nonOptionalFile(cmd, LINX_STRUCTURAL_VARIANT_TSV))
                 .linxFusionTsv(Config.nonOptionalFile(cmd, LINX_FUSION_TSV))
                 .linxBreakendTsv(Config.nonOptionalFile(cmd, LINX_BREAKEND_TSV))
                 .linxDriverCatalogTsv(Config.nonOptionalFile(cmd, LINX_DRIVER_CATALOG_TSV))
@@ -351,5 +387,20 @@ public interface OrangeConfig {
     @NotNull
     static Iterable<String> toStringSet(@NotNull String paramValue, @NotNull String separator) {
         return !paramValue.isEmpty() ? Sets.newHashSet(paramValue.split(separator)) : Sets.newHashSet();
+    }
+
+    @NotNull
+    private static LocalDate interpretExperimentDateParam(@NotNull String experimentDateString) {
+        String format = "yyMMdd";
+
+        LocalDate experimentDate;
+        try {
+            experimentDate = LocalDate.parse(experimentDateString, DateTimeFormatter.ofPattern(format, Locale.ENGLISH));
+            LOGGER.debug("Configured experiment date to {}", experimentDate);
+        } catch (DateTimeParseException exception) {
+            experimentDate = LocalDate.now();
+            LOGGER.warn("Could not parse configured experiment date '{}'. Expected format is '{}'", experimentDateString, format);
+        }
+        return experimentDate;
     }
 }

@@ -6,8 +6,6 @@ import java.util.Map;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.hartwig.hmftools.common.linx.ImmutableLinxData;
-import com.hartwig.hmftools.common.purple.ImmutablePurpleData;
 import com.hartwig.hmftools.orange.ImmutableOrangeConfig;
 import com.hartwig.hmftools.orange.OrangeConfig;
 import com.hartwig.hmftools.orange.OrangeConfigTestFactory;
@@ -16,6 +14,9 @@ import com.hartwig.hmftools.orange.algo.ImmutableOrangeReport;
 import com.hartwig.hmftools.orange.algo.OrangeAlgo;
 import com.hartwig.hmftools.orange.algo.OrangeReport;
 import com.hartwig.hmftools.orange.algo.isofox.ImmutableIsofoxInterpretedData;
+import com.hartwig.hmftools.orange.algo.linx.ImmutableLinxInterpretedData;
+import com.hartwig.hmftools.orange.algo.protect.ImmutableProtectInterpretedData;
+import com.hartwig.hmftools.orange.algo.purple.ImmutablePurpleInterpretedData;
 import com.hartwig.hmftools.orange.cohort.datamodel.Evaluation;
 import com.hartwig.hmftools.orange.cohort.datamodel.ImmutableEvaluation;
 import com.hartwig.hmftools.orange.cohort.percentile.PercentileType;
@@ -33,7 +34,7 @@ public class TestReportGenerator {
     private static final String REPORT_BASE_DIR = System.getProperty("user.home") + File.separator + "hmf" + File.separator + "tmp";
 
     private static final boolean USE_MOCK_DATA_FOR_REPORT = false;
-    private static final boolean REMOVE_UNREPORTED_VARIANTS = false;
+    private static final boolean REMOVE_UNREPORTED_VARIANTS = true;
 
     public static void main(String[] args) throws IOException {
         Configurator.setRootLevel(Level.DEBUG);
@@ -92,18 +93,32 @@ public class TestReportGenerator {
     private static OrangeReport removeUnreported(@NotNull OrangeReport report) {
         ImmutableOrangeReport.Builder builder = ImmutableOrangeReport.builder()
                 .from(report)
-                .purple(ImmutablePurpleData.builder()
+                .purple(ImmutablePurpleInterpretedData.builder()
                         .from(report.purple())
-                        .unreportedSomaticVariants(Lists.newArrayList())
-                        .unreportedGermlineVariants(Lists.newArrayList())
-                        .unreportedSomaticGainsLosses(Lists.newArrayList())
-                        .unreportedGermlineDeletions(Lists.newArrayList())
-                        .lohGenes(Lists.newArrayList())
+                        .allSomaticVariants(Lists.newArrayList())
+                        .additionalSuspectSomaticVariants(Lists.newArrayList())
+                        .allGermlineVariants(Lists.newArrayList())
+                        .additionalSuspectGermlineVariants(Lists.newArrayList())
+                        .allSomaticGeneCopyNumbers(Lists.newArrayList())
+                        .suspectGeneCopyNumbersWithLOH(Lists.newArrayList())
+                        .allSomaticGainsLosses(Lists.newArrayList())
+                        .nearReportableSomaticGains(Lists.newArrayList())
+                        .additionalSuspectSomaticGainsLosses(Lists.newArrayList())
+                        .allGermlineDeletions(Lists.newArrayList())
                         .build())
-                .linx(ImmutableLinxData.builder()
+                .linx(ImmutableLinxInterpretedData.builder()
                         .from(report.linx())
-                        .unreportedFusions(Lists.newArrayList())
-                        .unreportedGermlineDisruptions(Lists.newArrayList())
+                        .allStructuralVariants(Lists.newArrayList())
+                        .allFusions(Lists.newArrayList())
+                        .additionalSuspectFusions(Lists.newArrayList())
+                        .allBreakends(Lists.newArrayList())
+                        .additionalSuspectDisruptions(Lists.newArrayList())
+                        .allGermlineDisruptions(Lists.newArrayList())
+                        .build())
+                .protect(ImmutableProtectInterpretedData.builder()
+                        .from(report.protect())
+                        .unreportedEvidences(Lists.newArrayList())
+                        .unreportedTrials(Lists.newArrayList())
                         .build());
 
         if (report.isofox() != null) {

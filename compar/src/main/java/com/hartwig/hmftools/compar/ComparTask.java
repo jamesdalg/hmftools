@@ -17,8 +17,7 @@ public class ComparTask implements Callable
 
     private final MismatchWriter mWriter;
 
-    public ComparTask(
-            int taskId, final ComparConfig config, final MismatchWriter writer)
+    public ComparTask(int taskId, final ComparConfig config, final MismatchWriter writer)
     {
         mTaskId = taskId;
         mConfig = config;
@@ -39,7 +38,13 @@ public class ComparTask implements Callable
 
             processSample(sampleId);
 
-            if(i > 0 && (i % 100) == 0)
+            if(i > 0 && (i % 10) == 0)
+            {
+                // clean-up memory esp from somatic variant DB retrieval
+                System.gc();
+            }
+
+            if(i > 0 && (i % 50) == 0)
             {
                 CMP_LOGGER.info("{}: processed {} samples", mTaskId, i);
             }
@@ -58,10 +63,17 @@ public class ComparTask implements Callable
         int totalMismatches = 0;
         for(ItemComparer comparer : mComparators)
         {
-            CMP_LOGGER.debug("sample({}) checking {}", sampleId, comparer.category());
-
             List<Mismatch> mismatches = Lists.newArrayList();
-            comparer.processSample(sampleId, mismatches);
+
+            try
+            {
+                comparer.processSample(sampleId, mismatches);
+            }
+            catch(Exception e)
+            {
+                CMP_LOGGER.error("sample({}) failed processing: {}", sampleId, e.toString());
+                e.printStackTrace();
+            }
 
             mWriter.writeSampleMismatches(sampleId, comparer, mismatches);
             totalMismatches += mismatches.size();

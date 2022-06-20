@@ -1,7 +1,10 @@
 package com.hartwig.hmftools.compar;
 
+import static java.lang.String.format;
+
 import static com.hartwig.hmftools.compar.CommonUtils.DATA_DELIM;
-import static com.hartwig.hmftools.compar.CommonUtils.diffsStr;
+import static com.hartwig.hmftools.compar.CommonUtils.ITEM_DELIM;
+import static com.hartwig.hmftools.compar.DiffFunctions.diffsStr;
 
 import java.util.List;
 import java.util.StringJoiner;
@@ -24,12 +27,12 @@ public class Mismatch
 
     public static String commonHeader()
     {
-        return "Category,MismatchType,Key";
+        return "Category,MismatchType,Key,Differences";
     }
 
     public static String header()
     {
-        return commonHeader() + ",RefValues,NewValues,Differences";
+        return commonHeader() + ",AllValues";
     }
 
     public static String commonCsv(final Mismatch mismatch)
@@ -51,24 +54,52 @@ public class Mismatch
         return sj.toString();
     }
 
-    public String toCsv()
+    public String toCsv(boolean writeFieldValues, final List<String> comparedFieldsNames)
     {
         StringJoiner sj = new StringJoiner(DATA_DELIM);
 
         sj.add(commonCsv(this));
 
-        if(RefItem != null)
-            sj.add(diffsStr(RefItem.displayValues()));
-        else
-            sj.add("");
-
-        if(NewItem != null)
-            sj.add(diffsStr(NewItem.displayValues()));
-        else
-            sj.add("");
-
         sj.add(diffsStr(DiffValues));
+
+        if(writeFieldValues)
+        {
+            final List<String> refFieldValues = RefItem != null ? RefItem.displayValues() : null;
+            final List<String> newFieldValues = NewItem != null ? NewItem.displayValues() : null;
+            int fieldCount = refFieldValues != null ? refFieldValues.size() : newFieldValues.size();
+
+            for(int i = 0; i < fieldCount; ++i)
+            {
+                if(refFieldValues != null)
+                    sj.add(refFieldValues.get(i));
+                else
+                    sj.add("");
+
+                if(newFieldValues != null)
+                    sj.add(newFieldValues.get(i));
+                else
+                    sj.add("");
+            }
+        }
+        else
+        {
+            ComparableItem item = RefItem != null ? RefItem : NewItem;
+
+            StringJoiner displaySj = new StringJoiner(ITEM_DELIM);
+
+            List<String> itemDisplayValues = item.displayValues();
+
+            for(int i = 0; i < itemDisplayValues.size(); ++i)
+            {
+                displaySj.add(format("%s=%s", comparedFieldsNames.get(i), itemDisplayValues.get(i)));
+            }
+
+            sj.add(displaySj.toString());
+        }
 
         return sj.toString();
     }
+
+    public String toString() { return format("type(%s) item(%) diffs(%d)",
+            MismatchType, RefItem != null ? RefItem.key() : NewItem.key(), DiffValues.size()); }
 }

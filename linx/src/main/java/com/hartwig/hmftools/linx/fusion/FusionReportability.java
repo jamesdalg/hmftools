@@ -47,7 +47,7 @@ public class FusionReportability
     public static ReportableReason determineReportability(final GeneFusion fusion)
     {
         // first check whether a fusion is known or not - a key requirement of it being potentially reportable
-        if (fusion.knownType() == NONE || fusion.knownType() == IG_PROMISCUOUS)
+        if(fusion.knownType() == NONE || fusion.knownType() == IG_PROMISCUOUS)
             return KNOWN_TYPE;
 
         final BreakendTransData upTrans = fusion.upstreamTrans();
@@ -87,7 +87,7 @@ public class FusionReportability
         if(downTrans.bioType().equals(BIOTYPE_NONSENSE_MED_DECAY))
             return NMD;
 
-        if(downTrans.hasNegativePrevSpliceAcceptorDistance())
+        if(!fusion.isIG() && downTrans.hasNegativePrevSpliceAcceptorDistance())
             return NEG_SPLICE_ACC_DISTANCE;
 
         if(!permittedExonSkipping(fusion))
