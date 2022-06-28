@@ -2,13 +2,11 @@ package com.hartwig.hmftools.sage.candidate;
 
 import static com.hartwig.hmftools.common.utils.sv.BaseRegion.positionWithin;
 import static com.hartwig.hmftools.common.utils.sv.BaseRegion.positionsOverlap;
-import static com.hartwig.hmftools.sage.SageCommon.SG_LOGGER;
-import static com.hartwig.hmftools.sage.SageConstants.SC_INSERT_MIN_FLANK_LENGTH;
+import static com.hartwig.hmftools.sage.SageConstants.SC_INSERT_MIN_SC_LENGTH;
 import static com.hartwig.hmftools.sage.SageConstants.SC_INSERT_MIN_LENGTH;
 import static com.hartwig.hmftools.sage.SageConstants.SC_READ_EVENTS_FACTOR;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -323,7 +321,7 @@ public class RefContextConsumer implements Consumer<SAMRecord>
         if(!readExceedsQuality)
             return null;
 
-        if(scLength < SC_INSERT_MIN_FLANK_LENGTH + 1)
+        if(scLength < SC_INSERT_MIN_SC_LENGTH + 1)
             return null;
 
         AltRead altRead = processSoftClip(
@@ -363,10 +361,12 @@ public class RefContextConsumer implements Consumer<SAMRecord>
 
         final ReadContext readContext = mReadContextFactory.createInsertContext(altRead.Alt, refPosition, readIndex, record, refBases);
 
+        /*
         SG_LOGGER.trace("soft-clipped insert({}:{} {}>{}) indexes({}-{}-{}) read({}) softClip(len={} index={} on {})",
                 record.getContig(), refPosition, altRead.Ref, altRead.Alt,
                 readContext.indexedBases().LeftCoreIndex, readContext.indexedBases().Index, readContext.indexedBases().RightCoreIndex,
                 record.getReadName(), scLength, scReadIndex, onLeft ? "left" : "right");
+        */
 
         boolean sufficientMapQuality = record.getMappingQuality() >= mConfig.MinMapQuality;
 
@@ -383,13 +383,13 @@ public class RefContextConsumer implements Consumer<SAMRecord>
             int prevRefPos = readStart - 1;
             int refIndexOffset = prevRefPos - refBases.Position;
 
-            int refIndexStart = refBases.Index + refIndexOffset - SC_INSERT_MIN_FLANK_LENGTH + 1;
-            int refIndexEnd = refIndexStart + SC_INSERT_MIN_FLANK_LENGTH;
+            int refIndexStart = refBases.Index + refIndexOffset - SC_INSERT_MIN_SC_LENGTH + 1;
+            int refIndexEnd = refIndexStart + SC_INSERT_MIN_SC_LENGTH;
 
             if(refIndexStart < 0 || refIndexEnd > refBases.Bases.length) // can occur with SCs at the start of a chromosome
                 return null;
 
-            String requiredRefBases = new String(refBases.Bases, refIndexStart, SC_INSERT_MIN_FLANK_LENGTH);
+            String requiredRefBases = new String(refBases.Bases, refIndexStart, SC_INSERT_MIN_SC_LENGTH);
 
             String scBases = readBases.substring(0, scLength);
             int scMatchIndex = scBases.lastIndexOf(requiredRefBases);
@@ -400,7 +400,7 @@ public class RefContextConsumer implements Consumer<SAMRecord>
             if(scMatchIndex < SC_INSERT_MIN_LENGTH)
                 return null;
 
-            int scIndexMatchEnd = scMatchIndex + SC_INSERT_MIN_FLANK_LENGTH - 1;
+            int scIndexMatchEnd = scMatchIndex + SC_INSERT_MIN_SC_LENGTH - 1;
             int altLength = scLength - scIndexMatchEnd - 1;
 
             try
@@ -421,12 +421,12 @@ public class RefContextConsumer implements Consumer<SAMRecord>
             int refIndexOffset = nextRefPos - refBases.Position;
 
             int refIndexStart = refBases.Index + refIndexOffset;
-            int refIndexEnd = refIndexStart + SC_INSERT_MIN_FLANK_LENGTH;
+            int refIndexEnd = refIndexStart + SC_INSERT_MIN_SC_LENGTH;
 
             if(refIndexStart < 0 || refIndexEnd > refBases.Bases.length) // can occur with SCs at the start of a chromosome
                 return null;
 
-            String requiredRefBases = new String(refBases.Bases, refIndexStart, SC_INSERT_MIN_FLANK_LENGTH);
+            String requiredRefBases = new String(refBases.Bases, refIndexStart, SC_INSERT_MIN_SC_LENGTH);
 
             String scBases = readBases.substring(scReadIndex);
             int scMatchIndex = scBases.indexOf(requiredRefBases);

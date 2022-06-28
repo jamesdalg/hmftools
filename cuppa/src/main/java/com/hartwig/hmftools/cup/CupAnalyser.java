@@ -32,6 +32,7 @@ import com.hartwig.hmftools.cup.svs.SvClassifier;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
+import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.logging.log4j.Level;
@@ -52,8 +53,6 @@ public class CupAnalyser
         mConfig = new CuppaConfig(cmd);
 
         mSampleDataCache = new SampleDataCache();
-
-        mResultsWriter = new ResultsWriter(mConfig, mSampleDataCache);
 
         mClassifiers = Lists.newArrayList();
 
@@ -84,6 +83,8 @@ public class CupAnalyser
             mClassifiers.add(new AltSjClassifier(mConfig, mSampleDataCache, cmd));
 
         CUP_LOGGER.debug("{} classifiers loaded", mClassifiers.size());
+
+        mResultsWriter = new ResultsWriter(mConfig, mSampleDataCache);
     }
 
     private void loadSampleData(final CommandLine cmd)
@@ -111,13 +112,16 @@ public class CupAnalyser
         if(mSampleDataCache.SampleIds.isEmpty())
         {
             CUP_LOGGER.error("no samples specified");
-            return;
+            System.exit(1);
         }
 
-        if(!allClassifiersValid(mClassifiers))
+        for(CuppaClassifier classifier : mClassifiers)
         {
-            System.exit(1);
-            return;
+            if(!classifier.loadData())
+            {
+                CUP_LOGGER.error("classifier({}) failed data loading", classifier.categoryType());
+                System.exit(1);
+            }
         }
 
         if(mSampleDataCache.SpecificSample != null)
@@ -126,7 +130,9 @@ public class CupAnalyser
 
             CUP_LOGGER.info("sample({}) running CUP analysis", specificSample.Id);
             SampleTask sampleTask = new SampleTask(0, mConfig, mSampleDataCache, mClassifiers, mResultsWriter);
-            sampleTask.processSample(specificSample);
+
+            if(!sampleTask.processSample(specificSample))
+                System.exit(1);
         }
         else
         {
@@ -149,51 +155,42 @@ public class CupAnalyser
 
             List<Callable> callableTasks = sampleTasks.stream().collect(Collectors.toList());
 
-            TaskExecutor.executeTasks(callableTasks, mConfig.Threads);
+            if(!TaskExecutor.executeTasks(callableTasks, mConfig.Threads))
+                System.exit(1);
         }
 
         mResultsWriter.close();
 
         mClassifiers.forEach(x -> x.close());
 
-        if(!allClassifiersValid(mClassifiers))
-        {
-            CUP_LOGGER.info("CUP exiting with errors");
-            System.exit(1);
-        }
-
         CUP_LOGGER.info("CUP analysis complete");
-    }
-
-    public synchronized static boolean allClassifiersValid(final List<CuppaClassifier> classifiers)
-    {
-        boolean allInvalid = true;
-        for(CuppaClassifier classifier : classifiers)
-        {
-            if(!classifier.isValid())
-            {
-                allInvalid = false;
-                CUP_LOGGER.error("invalid classifier({})", classifier.categoryType());
-            }
-        }
-
-        return allInvalid;
     }
 
     public static void main(@NotNull final String[] args) throws ParseException
     {
         Options options = new Options();
+
         CuppaConfig.addCmdLineArgs(options);
 
-        final CommandLine cmd = createCommandLine(args, options);
-
-        if(cmd.hasOption(LOG_DEBUG))
+        try
         {
-            Configurator.setRootLevel(Level.DEBUG);
-        }
+            final CommandLine cmd = createCommandLine(args, options);
 
-        CupAnalyser cupAnalyser = new CupAnalyser(cmd);
-        cupAnalyser.run();
+            if(cmd.hasOption(LOG_DEBUG))
+            {
+                Configurator.setRootLevel(Level.DEBUG);
+            }
+
+            CupAnalyser cupAnalyser = new CupAnalyser(cmd);
+            cupAnalyser.run();
+        }
+        catch(ParseException e)
+        {
+            CUP_LOGGER.warn(e);
+            final HelpFormatter formatter = new HelpFormatter();
+            formatter.printHelp("CupAnalyser", options);
+            System.exit(1);
+        }
     }
 
     @NotNull

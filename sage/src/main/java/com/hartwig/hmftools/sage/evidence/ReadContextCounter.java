@@ -1,6 +1,8 @@
 package com.hartwig.hmftools.sage.evidence;
 
+import static java.lang.Math.abs;
 import static java.lang.Math.max;
+import static java.lang.String.format;
 
 import static com.hartwig.hmftools.sage.SageCommon.SG_LOGGER;
 import static com.hartwig.hmftools.sage.SageConstants.CORE_LOW_QUAL_MISMATCH_BASE_LENGTH;
@@ -62,7 +64,6 @@ public class ReadContextCounter implements VariantHotspot
 
     private int mSoftClipInsertSupport;
     private int mMaxCandidateDeleteLength;
-    private boolean mCountRealigned;
 
     private List<Integer> mLocalPhaseSets;
     private List<int[]> mLpsCounts;
@@ -110,7 +111,6 @@ public class ReadContextCounter implements VariantHotspot
         mRawRefBaseQuality = 0;
         mSoftClipInsertSupport = 0;
         mMaxCandidateDeleteLength = 0;
-        mCountRealigned = false;
 
         mLocalPhaseSets = null;
         mLpsCounts = null;
@@ -147,11 +147,7 @@ public class ReadContextCounter implements VariantHotspot
 
     public int tumorQuality()
     {
-        int tumorQuality = mQualities[RC_FULL] + mQualities[RC_PARTIAL];
-
-        if(mCountRealigned)
-            tumorQuality += mQualities[RC_REALIGNED];
-
+        int tumorQuality = mQualities[RC_FULL] + mQualities[RC_PARTIAL] + mQualities[RC_REALIGNED];
         return Math.max(0, tumorQuality - (int) mJitterPenalty);
     }
 
@@ -180,30 +176,6 @@ public class ReadContextCounter implements VariantHotspot
     public int rawRefBaseQuality() { return mRawRefBaseQuality; }
     public int softClipInsertSupport() { return mSoftClipInsertSupport; }
     public void setMaxCandidateDeleteLength(int length) { mMaxCandidateDeleteLength = length; }
-    public void setCountRealigned() { mCountRealigned = true; }
-
-    public void addLocalPhaseSet(int lps, int readCount, double allocCount)
-    {
-        if(mLocalPhaseSets == null)
-        {
-            mLocalPhaseSets = Lists.newArrayList();
-            mLpsCounts = Lists.newArrayList();
-        }
-
-        // add in order of highest counts
-        int index = 0;
-        while(index < mLpsCounts.size())
-        {
-            final int[] existingCounts = mLpsCounts.get(index);
-            if(readCount + allocCount > existingCounts[0] + existingCounts[0])
-                break;
-
-            ++index;
-        }
-
-        mLocalPhaseSets.add(index, lps);
-        mLpsCounts.add(index, new int[] { readCount, (int)allocCount } );
-    }
 
     public List<Integer> localPhaseSets() { return mLocalPhaseSets; }
     public List<int[]> lpsCounts() { return mLpsCounts; }
@@ -212,9 +184,13 @@ public class ReadContextCounter implements VariantHotspot
 
     public String toString()
     {
-        return String.format("id(%d) var(%s:%d %s>%s) core(%s) counts(f=%d p=%d c=%d)",
-                mId, mVariant.chromosome(), mVariant.position(), mVariant.ref(), mVariant.alt(),
-                mReadContext.toString(), mCounts[RC_FULL], mCounts[RC_PARTIAL], mCounts[RC_CORE]);
+        return format("id(%d) var(%s) core(%s) counts(f=%d p=%d c=%d)",
+                mId, varString(), mReadContext.toString(), mCounts[RC_FULL], mCounts[RC_PARTIAL], mCounts[RC_CORE]);
+    }
+
+    private String varString()
+    {
+        return format("%s:%d %s>%s", mVariant.chromosome(), mVariant.position(), mVariant.ref(), mVariant.alt());
     }
 
     public ReadMatchType processRead(
@@ -260,14 +236,7 @@ public class ReadContextCounter implements VariantHotspot
         boolean covered = mReadContext.indexedBases().isCoreCovered(readIndex, record.getReadBases().length);
 
         if(!covered)
-        {
-            SG_LOGGER.trace("var({}: {}->{}) readContext({}-{}-{}) no core coverage read(idx={} len={} id={})",
-                    mVariant.position(), mVariant.ref(), mVariant.alt(),
-                    mReadContext.indexedBases().LeftCoreIndex, mReadContext.indexedBases().Index,
-                    mReadContext.indexedBases().RightCoreIndex, readIndex, record.getReadBases().length, record.getReadName());
-
             return UNRELATED;
-        }
 
         final QualityConfig qualityConfig = sageConfig.Quality;
 
@@ -324,10 +293,13 @@ public class ReadContextCounter implements VariantHotspot
                 ++mCounts[RC_TOTAL];
                 mQualities[RC_TOTAL] += quality;
 
-                SG_LOGGER.trace("var({}: {}->{}) readContext({}-{}-{}) support({}) read(idx={} id={})",
-                        mVariant.position(), mVariant.ref(), mVariant.alt(),
-                        mReadContext.indexedBases().LeftCoreIndex, mReadContext.indexedBases().Index,
-                        mReadContext.indexedBases().RightCoreIndex, match, readIndex, record.getReadName());
+                if(mVariant.position() ==  10009063 || mVariant.position() == 10009098)
+                {
+                    SG_LOGGER.trace("var({}) readContext({}-{}-{}) support({}) read(idx={} posStart={} cigar={} id={}) readBases({})",
+                            varString(), mReadContext.indexedBases().LeftCoreIndex, mReadContext.indexedBases().Index,
+                            mReadContext.indexedBases().RightCoreIndex, match, readIndex, record.getAlignmentStart(), record.getCigarString(),
+                            record.getReadName(), record.getReadString());
+                }
 
                 countStrandedness(record);
                 checkImproperCount(record);
@@ -335,10 +307,9 @@ public class ReadContextCounter implements VariantHotspot
             }
         }
 
-        final RealignedContext realignment = realignmentContext(readIndex, record);
-        RealignedType realignedType = realignment != null ? realignment.Type : RealignedType.NONE;
+        RealignedContext realignment = checkRealignment(record, readIndex);
 
-        if(realignedType == RealignedType.EXACT)
+        if(realignment.Type == RealignedType.EXACT)
         {
             mCounts[RC_REALIGNED]++;
             mQualities[RC_REALIGNED] += quality;
@@ -348,7 +319,7 @@ public class ReadContextCounter implements VariantHotspot
             return SUPPORT;
         }
 
-        if(realignedType == RealignedType.NONE && rawContext.ReadIndexInSoftClip && !rawContext.AltSupport)
+        if(realignment.Type == RealignedType.NONE && rawContext.ReadIndexInSoftClip && !rawContext.AltSupport)
             return UNRELATED;
 
         ReadMatchType matchType = UNRELATED;
@@ -370,7 +341,7 @@ public class ReadContextCounter implements VariantHotspot
         }
 
         // Jitter Penalty
-        switch(realignedType)
+        switch(realignment.Type)
         {
             case LENGTHENED:
                 mJitterPenalty += jitterPenalty(qualityConfig, realignment.RepeatCount);
@@ -391,38 +362,118 @@ public class ReadContextCounter implements VariantHotspot
         if(mMaxCandidateDeleteLength < 5)
             return RawContext.INVALID_CONTEXT;
 
-        if(!record.getCigar().containsOperator(CigarOperator.S))
+        int scLenLeft = record.getCigar().isLeftClipped() ? record.getCigar().getFirstCigarElement().getLength() : 0;
+        int scLenRight = record.getCigar().isRightClipped() ? record.getCigar().getLastCigarElement().getLength() : 0;
+
+        if(max(scLenLeft, scLenRight) < 5)
             return RawContext.INVALID_CONTEXT;
 
-        int maxScLength = max(
-                record.getCigar().isLeftClipped() ? record.getCigar().getFirstCigarElement().getLength() : 0,
-                record.getCigar().isRightClipped() ? record.getCigar().getLastCigarElement().getLength() : 0);
-
-        if(maxScLength < 5)
+        final String variantCore = mReadContext.coreString();
+        int coreStartIndex = record.getReadString().indexOf(variantCore);
+        if(coreStartIndex < 1)
             return RawContext.INVALID_CONTEXT;
 
-        int coreIndex = record.getReadString().indexOf(mReadContext.coreString());
-        if(coreIndex < 1)
+        int coreEndIndex = coreStartIndex + variantCore.length() - 1;
+        boolean isValidRead = false;
+        int baseQuality = 0;
+
+        if(scLenLeft > scLenRight)
+        {
+            // the core match must span from the left soft-clipping into the matched bases
+            int readRightCorePosition = record.getReferencePositionAtReadPosition(coreEndIndex + 1);
+
+            if(readRightCorePosition > mVariant.position() && coreStartIndex < scLenLeft)
+            {
+                isValidRead = true;
+                baseQuality = record.getBaseQualities()[scLenLeft];
+            }
+        }
+        else
+        {
+            // the core match must span from the matched bases into the right soft-clipping
+            int readLeftCorePosition = record.getReferencePositionAtReadPosition(coreStartIndex + 1);
+            int postCoreIndexDiff = record.getReadBases().length - coreEndIndex;
+
+            if(readLeftCorePosition > 0 && readLeftCorePosition < mVariant.position() && postCoreIndexDiff < scLenRight)
+            {
+                isValidRead = true;
+                baseQuality = record.getBaseQualities()[record.getReadBases().length - scLenRight];
+            }
+        }
+
+        if(!isValidRead)
             return RawContext.INVALID_CONTEXT;
 
-        // the start of the core must align with where it is in the ref genome
-        int variantRefPosition = mReadContext.indexedBases().Position;
-
-        int leftCoreOffset = mReadContext.indexedBases().Index - mReadContext.indexedBases().LeftCoreIndex;
-        int impliedReadIndex = coreIndex + leftCoreOffset;
-
-        int readLeftCorePosition = record.getReferencePositionAtReadPosition(coreIndex + 1);
-        int readDelAdjustedIndexPosition = readLeftCorePosition + mMaxCandidateDeleteLength + leftCoreOffset;
-        int readRefPosition = record.getReferencePositionAtReadPosition(impliedReadIndex); // this will be zero if it falls in the soft-clipping
-
-        if(variantRefPosition != readRefPosition && variantRefPosition != readDelAdjustedIndexPosition)
-            return RawContext.INVALID_CONTEXT;
-
-        int baseQuality = record.getBaseQualities()[impliedReadIndex];
+        int readIndex = coreStartIndex + mReadContext.indexedBases().Index - mReadContext.indexedBases().LeftCoreIndex;
 
         return new RawContext(
-                impliedReadIndex, false, false, true,
+                readIndex, false, false, true,
                 true, false, true, baseQuality, 0);
+    }
+
+    private RealignedContext checkRealignment(final SAMRecord record, final int readIndex)
+    {
+        // try left and right alignment in turn
+
+        // Left alignment: Match full read context starting at base = pos - rc_index
+        int leftCoreOffset = mReadContext.indexedBases().Index - mReadContext.indexedBases().LeftCoreIndex;
+        int realignLeftCorePos = position() - leftCoreOffset;
+        int realignLeftReadIndex = record.getReadPositionAtReferencePosition(realignLeftCorePos) - 1 + leftCoreOffset;
+
+        IndexedBases readBases = new IndexedBases(position(), realignLeftReadIndex, record.getReadBases());
+
+        ReadContextMatch match = mReadContext.indexedBases().matchAtPosition(
+                readBases, record.getBaseQualities(), false, 0);
+
+        if(match == ReadContextMatch.FULL || match == ReadContextMatch.PARTIAL)
+            return new RealignedContext(RealignedType.EXACT, 0);
+
+        // Right alignment: Match full read context ending at base = pos + length[RC} - rc_index - 1 + length(alt) - length(ref)
+        /*
+        int rightCoreOffset = mReadContext.indexedBases().RightCoreIndex - mReadContext.indexedBases().Index;
+        int realignRightCorePos = position() + rightCoreOffset + mVariant.alt().length() - mVariant.ref().length();
+        int realignRightReadIndex = record.getReadPositionAtReferencePosition(realignRightCorePos);
+
+        // - 1 - rightCoreOffset;
+        // realignRightReadIndex = 44;
+
+        readBases = new IndexedBases(position(), realignRightReadIndex, record.getReadBases());
+
+        match = mReadContext.indexedBases().matchAtPosition(
+                readBases, record.getBaseQualities(), false, 0);
+
+        if(match == ReadContextMatch.FULL || match == ReadContextMatch.PARTIAL)
+            return new RealignedContext(RealignedType.EXACT, 0);
+        */
+
+        // old method, also currently used to calculate the jitter penalty
+        int maxRealignDistance = getMaxRealignmentDistance(record);
+        RealignedContext realignment = Realigned.realignedAroundIndex(mReadContext, readIndex, record.getReadBases(), maxRealignDistance);
+
+        return realignment;
+    }
+
+    public void addLocalPhaseSet(int lps, int readCount, double allocCount)
+    {
+        if(mLocalPhaseSets == null)
+        {
+            mLocalPhaseSets = Lists.newArrayList();
+            mLpsCounts = Lists.newArrayList();
+        }
+
+        // add in order of highest counts
+        int index = 0;
+        while(index < mLpsCounts.size())
+        {
+            final int[] existingCounts = mLpsCounts.get(index);
+            if(readCount + allocCount > existingCounts[0] + existingCounts[0])
+                break;
+
+            ++index;
+        }
+
+        mLocalPhaseSets.add(index, lps);
+        mLpsCounts.add(index, new int[] { readCount, (int)allocCount } );
     }
 
     private void countStrandedness(final SAMRecord record)
@@ -433,7 +484,7 @@ public class ReadContextCounter implements VariantHotspot
             mReverseStrand++;
     }
 
-    private RealignedContext realignmentContext(int readIndex, SAMRecord record)
+    private int getMaxRealignmentDistance(final SAMRecord record)
     {
         int index = mReadContext.readBasesPositionIndex();
         int leftIndex = mReadContext.readBasesLeftCentreIndex();
@@ -444,10 +495,7 @@ public class ReadContextCounter implements VariantHotspot
 
         int indelLength = indelLength(record);
 
-        return Realigned.realignedAroundIndex(mReadContext,
-                readIndex,
-                record.getReadBases(),
-                Math.max(indelLength + Math.max(leftOffset, rightOffset), Realigned.MAX_REPEAT_SIZE));
+        return Math.max(indelLength + Math.max(leftOffset, rightOffset), Realigned.MAX_REPEAT_SIZE) + 1;
     }
 
     private int qualityJitterPenalty() { return (int) mJitterPenalty; }

@@ -68,18 +68,12 @@ public class ReadContextEvidence
         if(candidates.isEmpty())
             return mReadCounters;
 
-        if(mSageConfig.CoreSearch)
-        {
-            mMaxDeleteLength = candidates.stream()
-                    .filter(x -> x.variant().isIndel())
-                    .mapToInt(x -> max(x.variant().ref().length() - x.variant().alt().length(), 0)).max().orElse(0);
+        mMaxDeleteLength = candidates.stream()
+                .filter(x -> x.variant().isIndel())
+                .mapToInt(x -> max(x.variant().ref().length() - x.variant().alt().length(), 0)).max().orElse(0);
 
-            if(mMaxDeleteLength >= 5)
-                mReadCounters.forEach(x -> x.setMaxCandidateDeleteLength(mMaxDeleteLength));
-        }
-
-        if(mSageConfig.CountRealigned)
-            mReadCounters.forEach(x -> x.setCountRealigned());
+        if(mMaxDeleteLength >= 5)
+            mReadCounters.forEach(x -> x.setMaxCandidateDeleteLength(mMaxDeleteLength));
 
         final Candidate firstCandidate = candidates.get(0);
         final Candidate lastCandidate = candidates.get(candidates.size() - 1);

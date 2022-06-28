@@ -58,8 +58,6 @@ public class SampleTraitClassifier implements CuppaClassifier
 
     private static final String APPLY_PLOIDY_LIKELIHOOD = "apply_ploidy_likelihood";
 
-    private boolean mIsValid;
-
     public SampleTraitClassifier(final CuppaConfig config, final SampleDataCache sampleDataCache, final CommandLine cmd)
     {
         mConfig = config;
@@ -71,48 +69,9 @@ public class SampleTraitClassifier implements CuppaClassifier
         mRefGenderRates = Maps.newHashMap();
 
         mApplyPloidyLikelihood = cmd.hasOption(APPLY_PLOIDY_LIKELIHOOD);
-
-        mIsValid = true;
-
-        if(mConfig.RefTraitPercFile.isEmpty() && mConfig.RefTraitRateFile.isEmpty())
-            return;
-
-        if(!loadRefPercentileData(mConfig.RefTraitPercFile, mRefTraitPercentiles))
-        {
-            CUP_LOGGER.error("invalid ref sample trait percentile data");
-            mIsValid = false;
-            return;
-        }
-
-        if(!loadRefRateData(mConfig.RefTraitRateFile, mRefTraitRates))
-        {
-            CUP_LOGGER.error("invalid ref sample trait rates data");
-            mIsValid = false;
-            return;
-        }
-
-        if(Files.exists(Paths.get(mConfig.RefGenderRateFile)) && !loadRefGenderRateData(mConfig.RefGenderRateFile, mRefGenderRates))
-        {
-            CUP_LOGGER.error("invalid ref gender rates data");
-            mIsValid = false;
-            return;
-        }
-
-        CUP_LOGGER.info("loaded sample-traits ref data");
-
-        if(!loadSampleTraitsData())
-        {
-            CUP_LOGGER.error("invalid sample trait percentile data");
-            mIsValid = false;
-            return;
-        }
-
-        // cache for other components to use
-        mSampleTraitsData.entrySet().forEach(x -> mSampleDataCache.RefSampleTraitsData.put(x.getKey(), x.getValue()));
     }
 
     public CategoryType categoryType() { return SAMPLE_TRAIT; }
-    public boolean isValid() { return mIsValid; }
     public void close() {}
 
     public static void addCmdLineArgs(Options options)
@@ -120,44 +79,87 @@ public class SampleTraitClassifier implements CuppaClassifier
         options.addOption(APPLY_PLOIDY_LIKELIHOOD, false, "Add ploidy high/low likelihood feature");
     }
 
-    private boolean loadSampleTraitsData()
+    @Override
+    public boolean loadData()
     {
-        if(!mConfig.SampleTraitsFile.isEmpty())
+        return loadRefData() && loadSampleData();
+    }
+
+    private boolean loadRefData()
+    {
+        if(mConfig.RefTraitPercFile.isEmpty() && mConfig.RefTraitRateFile.isEmpty())
+            return false;
+
+        if(!loadRefPercentileData(mConfig.RefTraitPercFile, mRefTraitPercentiles))
         {
-            CUP_LOGGER.info("loading cohort sample traits from file({})", mConfig.SampleTraitsFile);
-
-            if(!loadTraitsFromCohortFile(mConfig.SampleTraitsFile, mSampleTraitsData))
-                return false;
-
-            CUP_LOGGER.info("loaded traits for {} samples", mSampleTraitsData.size());
+            CUP_LOGGER.error("invalid ref sample trait percentile data");
+            return false;
         }
-        else if(mConfig.DbAccess != null)
+
+        if(!loadRefRateData(mConfig.RefTraitRateFile, mRefTraitRates))
         {
-            if(!loadTraitsFromDatabase(mConfig.DbAccess, mSampleDataCache.SampleIds, mSampleTraitsData))
+            CUP_LOGGER.error("invalid ref sample trait rates data");
+            return false;
+        }
+
+        if(Files.exists(Paths.get(mConfig.RefGenderRateFile)) && !loadRefGenderRateData(mConfig.RefGenderRateFile, mRefGenderRates))
+        {
+            CUP_LOGGER.error("invalid ref gender rates data");
+            return false;
+        }
+
+        return true;
+    }
+
+    private boolean loadSampleData()
+    {
+        if(mConfig.TestRefData)
+        {
+            if(!mConfig.RefSampleTraitsFile.isEmpty())
+            {
+                CUP_LOGGER.info("loading ref cohort traits from file({})", mConfig.RefSampleTraitsFile);
+
+                if(!loadTraitsFromCohortFile(mConfig.RefSampleTraitsFile, mSampleTraitsData))
+                    return false;
+
+                CUP_LOGGER.info("loaded traits for {} samples", mSampleTraitsData.size());
+            }
+            else
+            {
+                CUP_LOGGER.error("missing ref cohort traits file");
                 return false;
+            }
         }
         else
         {
-            for(SampleData sample : mSampleDataCache.SampleDataList)
+            if(mConfig.DbAccess != null)
             {
-                String purpleDir = mConfig.getPurpleDataDir(sample.Id);
+                if(!loadTraitsFromDatabase(mConfig.DbAccess, mSampleDataCache.SampleIds, mSampleTraitsData))
+                    return false;
+            }
+            else
+            {
+                for(SampleData sample : mSampleDataCache.SampleDataList)
+                {
+                    String purpleDir = mConfig.getPurpleDataDir(sample.Id);
 
-                try
-                {
-                    final PurityContext purityContext = PurityContextFile.read(purpleDir, sample.Id);
-                    SampleTraitsData traitsData = SampleTraitsData.from(sample.Id, purityContext, 0);
-                    mSampleTraitsData.put(traitsData.SampleId, traitsData);
-                }
-                catch(Exception e)
-                {
-                    CUP_LOGGER.error("sample({}) sample traits - failed to load purity file from dir{}): {}",
-                            sample.Id, purpleDir, e.toString());
-                    mIsValid = false;
-                    break;
+                    try
+                    {
+                        final PurityContext purityContext = PurityContextFile.read(purpleDir, sample.Id);
+                        SampleTraitsData traitsData = SampleTraitsData.from(sample.Id, purityContext, 0);
+                        mSampleTraitsData.put(traitsData.SampleId, traitsData);
+                    }
+                    catch(Exception e)
+                    {
+                        CUP_LOGGER.error("sample({}) sample traits - failed to load purity file from dir{}): {}",
+                                sample.Id, purpleDir, e.toString());
+                        return false;
+                    }
                 }
             }
         }
 
+        // cache traits for other components to use
         for(SampleData sample : mSampleDataCache.SampleDataList)
         {
             final SampleTraitsData sampleTraits = mSampleTraitsData.get(sample.Id);
@@ -166,21 +168,23 @@ public class SampleTraitClassifier implements CuppaClassifier
                 sample.setGender(sampleTraits.GenderType);
         }
 
+        mSampleTraitsData.entrySet().forEach(x -> mSampleDataCache.SampleTraitsData.put(x.getKey(), x.getValue()));
+
         return true;
     }
 
-    public void processSample(final SampleData sample, final List<SampleResult> results, final List<SampleSimilarity> similarities)
+    @Override
+    public boolean processSample(final SampleData sample, final List<SampleResult> results, final List<SampleSimilarity> similarities)
     {
-        if(!mIsValid || mRefTraitRates.isEmpty())
-            return;
+        if(mRefTraitRates.isEmpty())
+            return false;
 
         final SampleTraitsData sampleTraits = mSampleTraitsData.get(sample.Id);
 
         if(sampleTraits == null)
         {
             CUP_LOGGER.warn("sample({}) has missing traits data, classifier invalid", sample.Id);
-            mIsValid = false;
-            return;
+            return false;
         }
 
         addTraitPrevalences(sample, sampleTraits, results);
@@ -192,6 +196,7 @@ public class SampleTraitClassifier implements CuppaClassifier
             addTraitLikelihoods(sample, cancerSampleCount, results, PLOIDY, sampleTraits.Ploidy);
 
         addGenderClassifier(sample, sampleTraits, results);
+        return true;
     }
 
     private void addGenderClassifier(final SampleData sample, final SampleTraitsData sampleTraits, final List<SampleResult> results)

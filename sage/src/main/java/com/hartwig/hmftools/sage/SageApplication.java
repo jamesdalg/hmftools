@@ -21,6 +21,7 @@ import com.hartwig.hmftools.sage.coverage.Coverage;
 import com.hartwig.hmftools.sage.coverage.GeneDepthFile;
 import com.hartwig.hmftools.sage.phase.PhaseSetCounter;
 import com.hartwig.hmftools.sage.pipeline.ChromosomePipeline;
+import com.hartwig.hmftools.sage.quality.BaseQualityRecalibration;
 import com.hartwig.hmftools.sage.quality.QualityRecalibrationMap;
 import com.hartwig.hmftools.sage.vcf.VcfWriter;
 
@@ -43,7 +44,6 @@ public class SageApplication implements AutoCloseable
     private final ReferenceData mRefData;
 
     private final PhaseSetCounter mPhaseSetCounter;
-
     private final VcfWriter mVcfWriter;
 
     private SageApplication(final CommandLine cmd)
@@ -79,7 +79,13 @@ public class SageApplication implements AutoCloseable
         long startTime = System.currentTimeMillis();
         final Coverage coverage = createCoverage();
 
-        final Map<String,QualityRecalibrationMap> recalibrationMap = buildQualityRecalibrationMap(mConfig, mRefData.RefGenome);
+        BaseQualityRecalibration baseQualityRecalibration = new BaseQualityRecalibration(mConfig, mRefData.RefGenome);
+        baseQualityRecalibration.produceRecalibrationMap();
+
+        if(!baseQualityRecalibration.isValid())
+            System.exit(1);
+
+        final Map<String,QualityRecalibrationMap> recalibrationMap = baseQualityRecalibration.getSampleRecalibrationMap();
 
         int initMemory = calcMemoryUsage(false);
         logMemoryUsage(mConfig, "BQR", initMemory);
@@ -154,7 +160,7 @@ public class SageApplication implements AutoCloseable
         mVcfWriter.close();
     }
 
-    public static void main(final String... args) throws IOException, InterruptedException, ExecutionException
+    public static void main(final String... args) throws IOException
     {
         final Options options = SageConfig.createSageOptions();
 
