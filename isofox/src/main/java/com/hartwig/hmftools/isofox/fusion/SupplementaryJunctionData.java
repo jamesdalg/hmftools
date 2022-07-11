@@ -6,6 +6,7 @@ import static com.hartwig.hmftools.common.utils.sv.StartEndIterator.SE_START;
 import static com.hartwig.hmftools.common.utils.sv.SvCommonUtils.NEG_ORIENT;
 import static com.hartwig.hmftools.common.utils.sv.SvCommonUtils.POS_ORIENT;
 
+import static htsjdk.samtools.CigarOperator.D;
 import static htsjdk.samtools.CigarOperator.M;
 import static htsjdk.samtools.CigarOperator.N;
 
@@ -13,7 +14,8 @@ import java.util.List;
 import java.util.Map;
 
 import com.google.common.collect.Lists;
-import com.hartwig.hmftools.isofox.common.CommonUtils;
+import com.hartwig.hmftools.common.samtools.SoftClipSide;
+import com.hartwig.hmftools.common.samtools.SupplementaryReadData;
 import com.hartwig.hmftools.isofox.common.ReadRecord;
 
 import htsjdk.samtools.Cigar;
@@ -63,7 +65,7 @@ public class SupplementaryJunctionData
             return null;
 
         // find the junction from this read's SC and same for the supp mapping data
-        SoftClipSide scSide = SoftClipSide.fromRead(read);
+        SoftClipSide scSide = ReadRecord.softClipSide(read);
 
         SupplementaryJunctionData suppJuncData = new SupplementaryJunctionData(read.Id);
 
@@ -89,7 +91,7 @@ public class SupplementaryJunctionData
         else
         {
             int skippedBases = remoteCigar.getCigarElements().stream()
-                    .filter(x -> x.getOperator() == N || x.getOperator() == M)
+                    .filter(x -> x.getOperator() == N || x.getOperator() == M || x.getOperator() == D)
                     .mapToInt(x -> x.getLength()).sum();
 
             suppJuncData.RemoteJunctionPos = suppData.Position + skippedBases - 1;

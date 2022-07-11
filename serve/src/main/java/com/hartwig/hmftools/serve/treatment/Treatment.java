@@ -15,5 +15,8 @@ public abstract class Treatment {
     public abstract String treament();
 
     @NotNull
-    public abstract Set<String> drugClasses();
+    public abstract Set<String> sourceRelevantTreatmentApproaches();
+
+    @NotNull
+    public abstract Set<String> relevantTreatmentApproaches();
 }

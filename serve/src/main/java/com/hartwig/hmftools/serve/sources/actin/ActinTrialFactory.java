@@ -4,7 +4,7 @@ import com.google.common.collect.Sets;
 import com.hartwig.hmftools.common.serve.Knowledgebase;
 import com.hartwig.hmftools.common.serve.actionability.EvidenceDirection;
 import com.hartwig.hmftools.common.serve.actionability.EvidenceLevel;
-import com.hartwig.hmftools.serve.cancertype.ImmutableCancerType;
+import com.hartwig.hmftools.serve.cancertype.CancerTypeConstants;
 import com.hartwig.hmftools.serve.sources.actin.reader.ActinEntry;
 import com.hartwig.hmftools.serve.treatment.ImmutableTreatment;
 import com.hartwig.hmftools.serve.treatment.Treatment;
@@ -30,7 +30,7 @@ public final class ActinTrialFactory {
                 .sourceEvent(sourceEvent)
                 .sourceUrls(Sets.newHashSet())
                 .treatment(extractTreatment(entry))
-                .applicableCancerType(ImmutableCancerType.builder().name("Cancer").doid("162").build())
+                .applicableCancerType(CancerTypeConstants.CANCER_TYPE)
                 .blacklistCancerTypes(Sets.newHashSet())
                 .level(EvidenceLevel.B)
                 .direction(entry.isUsedAsInclusion() ? EvidenceDirection.RESPONSIVE : EvidenceDirection.NO_BENEFIT)
@@ -48,6 +48,10 @@ public final class ActinTrialFactory {
             addon = TRIAL_COHORT_SEPARATOR + entry.cohort();
         }
 
-        return ImmutableTreatment.builder().treament(entry.trial() + addon).drugClasses(Sets.newHashSet("study")).build();
+        return ImmutableTreatment.builder()
+                .treament(entry.trial() + addon)
+                .sourceRelevantTreatmentApproaches(Sets.newHashSet())
+                .relevantTreatmentApproaches(Sets.newHashSet("study"))
+                .build();
     }
 }

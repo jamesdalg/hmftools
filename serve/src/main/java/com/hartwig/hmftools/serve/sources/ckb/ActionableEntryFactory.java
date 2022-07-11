@@ -16,14 +16,17 @@ import com.hartwig.hmftools.ckb.datamodel.treatmentapproaches.RelevantTreatmentA
 import com.hartwig.hmftools.common.serve.Knowledgebase;
 import com.hartwig.hmftools.common.serve.actionability.EvidenceDirection;
 import com.hartwig.hmftools.common.serve.actionability.EvidenceLevel;
+import com.hartwig.hmftools.common.serve.classification.EventType;
 import com.hartwig.hmftools.serve.cancertype.CancerType;
+import com.hartwig.hmftools.serve.cancertype.CancerTypeConstants;
 import com.hartwig.hmftools.serve.cancertype.ImmutableCancerType;
-import com.hartwig.hmftools.serve.curation.DrugClasses;
+import com.hartwig.hmftools.serve.curation.FilterRelevantTreatmentApproachEntry;
+import com.hartwig.hmftools.serve.curation.RelevantTreatmentApproachKey;
+import com.hartwig.hmftools.serve.curation.RelevantTreatmentApproch;
 import com.hartwig.hmftools.serve.treatment.ImmutableTreatment;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.util.Strings;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -67,31 +70,17 @@ class ActionableEntryFactory {
 
     @NotNull
     public static Set<ActionableEntry> toActionableEntries(@NotNull CkbEntry entry, @NotNull String sourceEvent,
-            @NotNull Map<String, DrugClasses> drugClassesCurations) {
+            @NotNull Map<RelevantTreatmentApproachKey, RelevantTreatmentApproch> drugClassesCurations, @NotNull String gene,
+            @NotNull EventType eventType, @NotNull List<FilterRelevantTreatmentApproachEntry> filterRelevantTreatmentApproachEntries) {
         Set<ActionableEntry> actionableEntries = Sets.newHashSet();
-        Set<String> drugClasses = Sets.newHashSet();
+        Set<String> sourceRelevantTreatmentApproaches = Sets.newHashSet();
+        Set<String> curatedRelevantTreatmentApproaches = Sets.newHashSet();
+
         for (Evidence evidence : evidencesWithUsableType(entry.evidences())) {
             EvidenceLevel level = resolveLevel(evidence.ampCapAscoEvidenceLevel());
             EvidenceDirection direction = resolveDirection(evidence.responseType());
-            String doid = extractAndCurateDoid(evidence.indication().termId());
-
-            for (RelevantTreatmentApproaches relevantTreatmentApproaches : evidence.relevantTreatmentApproaches()) {
-                DrugClass drugClass = relevantTreatmentApproaches.drugClass();
-
-                if (drugClass == null) {
-                    drugClasses.add(Strings.EMPTY);
-                } else {
-                    DrugClasses drugClassesMap = drugClassesCurations.get(drugClass.drugClass());
-                    if (drugClassesMap != null) {
-                        if (drugClass.drugClass().equals(drugClassesMap.curatedDrugClass())) {
-                            drugClasses.add(drugClassesMap.curatedDrugClass());
-                        } else {
-                            LOGGER.warn("Drug class '{}' isn't curated", drugClass.drugClass());
-                            drugClasses.add(Strings.EMPTY);
-                        }
-                    }
-                }
-            }
+            String[] sourceCancerTypes = extractSourceCancerTypeId(evidence.indication().termId());
+            String doid = extractAndCurateDoid(sourceCancerTypes);
 
             if (level != null && direction != null && doid != null) {
                 String treatment = evidence.therapy().therapyName();
@@ -104,7 +93,14 @@ class ActionableEntryFactory {
                     }
                 }
 
-                String sourceCancerTypeId = extractSourceCancerTypeId(evidence.indication().termId());
+                String sourceCancerTypeId;
+                if (extractSourceCancerTypeId(evidence.indication().termId()) == null) {
+                    sourceCancerTypeId = null;
+                } else {
+                    assert extractSourceCancerTypeId(evidence.indication().termId()) != null;
+                    assert extractSourceCancerTypeId(evidence.indication().termId()).length == 2;
+                    sourceCancerTypeId = extractSourceCancerTypeId(evidence.indication().termId())[1];
+                }
 
                 String responseType = toUrlString(evidence.responseType());
 
@@ -116,17 +112,61 @@ class ActionableEntryFactory {
                 }
 
                 Set<CancerType> blacklistedCancerTypes = Sets.newHashSet();
-                if (doid.equals("162")) {
-                    blacklistedCancerTypes.add(ImmutableCancerType.builder().name("Leukemia").doid("1240").build());
-                    blacklistedCancerTypes.add(ImmutableCancerType.builder().name("Refractory hematologic cancer").doid("712").build());
-                    blacklistedCancerTypes.add(ImmutableCancerType.builder().name("Bone marrow cancer").doid("4960").build());
+                if (doid.equals(CancerTypeConstants.CANCER_DOID)) {
+                    blacklistedCancerTypes.add(CancerTypeConstants.LEUKEMIA_TYPE);
+                    blacklistedCancerTypes.add(CancerTypeConstants.REFRACTORY_HEMATOLOGIC_TYPE);
+                    blacklistedCancerTypes.add(CancerTypeConstants.BONE_MARROW_TYPE);
+                }
+
+                for (RelevantTreatmentApproaches relevantTreatmentApproaches : evidence.relevantTreatmentApproaches()) {
+                    DrugClass relevantTreatmentApproachesInfo = relevantTreatmentApproaches.drugClass();
+
+                    if (relevantTreatmentApproachesInfo != null) {
+
+                        sourceRelevantTreatmentApproaches.add(relevantTreatmentApproachesInfo.drugClass());
+                        RelevantTreatmentApproch relevantTreatmentApprachMap =
+                                drugClassesCurations.get(relevantTreatmentApproachesInfo.drugClass());
+                        String interpretEventKnowledgebase = gene + " " + eventType.name();
+                        for (FilterRelevantTreatmentApproachEntry filter : filterRelevantTreatmentApproachEntries) {
+                            if (filter.treatment().equals(treatment) && filter.eventMatch().equals(interpretEventKnowledgebase)
+                                    && filter.level() == level && filter.direction() == direction) {
+
+                                if (relevantTreatmentApprachMap != null) {
+                                    if (relevantTreatmentApprachMap.treatmentApproachKey()
+                                            .matchEvent()
+                                            .equals(interpretEventKnowledgebase)) {
+                                        curatedRelevantTreatmentApproaches.add(relevantTreatmentApprachMap.curatedtreatmentApproach());
+                                    } else {
+                                        LOGGER.warn("The treatment '{}' with relevant treatment approach '{}' of event '{}' "
+                                                        + "with level '{}' and direction '{}' isn't curated",
+                                                relevantTreatmentApprachMap.treatmentApproachKey().treatment(),
+                                                relevantTreatmentApprachMap.treatmentApproachKey().treatmentApproach(),
+                                                relevantTreatmentApprachMap.treatmentApproachKey().matchEvent(),
+                                                level,
+                                                direction);
+                                    }
+                                } else {
+                                    LOGGER.warn("The treatment '{}' of relevant treatment approach of event '{}' "
+                                                    + "with level '{}' and direction '{}' is empty",
+                                            treatment,
+                                            interpretEventKnowledgebase,
+                                            level,
+                                            direction);
+                                }
+                            }
+                        }
+                    }
                 }
 
                 actionableEntries.add(ImmutableActionableEntry.builder()
                         .source(Knowledgebase.CKB)
                         .sourceEvent(sourceEvent)
                         .sourceUrls(sourceUrls)
-                        .treatment(ImmutableTreatment.builder().treament(treatment).drugClasses(drugClasses).build())
+                        .treatment(ImmutableTreatment.builder()
+                                .treament(treatment)
+                                .sourceRelevantTreatmentApproaches(sourceRelevantTreatmentApproaches)
+                                .relevantTreatmentApproaches(curatedRelevantTreatmentApproaches)
+                                .build())
                         .applicableCancerType(ImmutableCancerType.builder().name(cancerType).doid(doid).build())
                         .blacklistCancerTypes(blacklistedCancerTypes)
                         .level(level)
@@ -134,7 +174,8 @@ class ActionableEntryFactory {
                         .evidenceUrls(evidenceUrls)
                         .build());
             }
-        } return actionableEntries;
+        }
+        return actionableEntries;
     }
 
     @NotNull
@@ -156,7 +197,7 @@ class ActionableEntryFactory {
 
     @Nullable
     @VisibleForTesting
-    static String extractSourceCancerTypeId(@Nullable String doidString) {
+    static String[] extractSourceCancerTypeId(@Nullable String doidString) {
         if (doidString == null) {
             return null;
         }
@@ -164,10 +205,10 @@ class ActionableEntryFactory {
         String[] parts = doidString.split(":");
         if (parts.length == 2) {
             String source = parts[0];
-            String id = parts[1];
             if (source.equalsIgnoreCase("doid") || source.equalsIgnoreCase("jax")) {
-                return id;
+                return parts;
             } else {
+                LOGGER.warn("Unexpected length of doid string '{}'", doidString);
                 return null;
             }
         } else {
@@ -178,40 +219,36 @@ class ActionableEntryFactory {
 
     @Nullable
     @VisibleForTesting
-    static String extractAndCurateDoid(@Nullable String doidString) {
+    static String extractAndCurateDoid(@Nullable String[] doidString) {
         if (doidString == null) {
             return null;
         }
 
-        String[] parts = doidString.split(":");
-        if (parts.length == 2) {
-            String source = parts[0];
-            String id = parts[1];
-            if (source.equalsIgnoreCase("doid")) {
-                return id;
-            } else if (source.equalsIgnoreCase("jax")) {
-                switch (id) {
-                    case "10000003":
-                        // CKB uses this as Advanced Solid Tumor
-                        return "162";
-                    case "10000009":
-                        // CKB uses this as Squamous Cell Carcinoma of Unknown Primary
-                        return "1749";
-                    case "10000008":
-                        // CKB uses this as Adenocarcinoma of Unknown Primary
-                        return "299";
-                    default:
-                        // CKB uses 10000005 for configuring "Not a cancer". We can ignore these.
-                        if (!id.equals("10000005")) {
-                            LOGGER.warn("Unexpected DOID string annotated by CKB: '{}'", doidString);
-                        }
-                        return null;
-                }
-            } else {
-                return null;
+        assert doidString.length == 2;
+        String source = doidString[0];
+        String id = doidString[1];
+        if (source.equalsIgnoreCase("doid")) {
+            return id;
+        } else if (source.equalsIgnoreCase("jax")) {
+            switch (id) {
+                case CancerTypeConstants.JAX_ADVANCES_SOLID_TUMORS:
+                    // CKB uses this as Advanced Solid Tumor
+                    return CancerTypeConstants.CANCER_DOID;
+                case CancerTypeConstants.JAX_SQUAMOUD_CELL_CARCINOMA_OF_UNKNOWN_PRIMARY:
+                    // CKB uses this as Squamous Cell Carcinoma of Unknown Primary
+                    return CancerTypeConstants.SQUAMOUD_CELL_CARCINOMA_OF_UNKNOWN_PRIMARY;
+                case CancerTypeConstants.JAX_ADENOCARCINOMA_OF_UNKNOWN_PRIMARY:
+                    // CKB uses this as Adenocarcinoma of Unknown Primary
+                    return CancerTypeConstants.ADENOCARCINOMA_OF_UNKNOWN_PRIMARY;
+                default:
+                    // CKB uses 10000005 for configuring "Not a cancer". We can ignore these.
+                    if (!id.equals(CancerTypeConstants.JAX_NOT_CANCER)) {
+                        LOGGER.warn("Unexpected DOID string annotated by CKB: '{}'", source + ":" + id);
+                    }
+                    return null;
             }
         } else {
-            LOGGER.warn("Unexpected DOID string in CKB: '{}'", doidString);
+            LOGGER.warn("Unexpected source '{}'", source);
             return null;
         }
     }

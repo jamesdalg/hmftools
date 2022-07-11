@@ -1,4 +1,4 @@
-package com.hartwig.hmftools.isofox.fusion;
+package com.hartwig.hmftools.common.samtools;
 
 public class SupplementaryReadData
 {
@@ -11,8 +11,14 @@ public class SupplementaryReadData
     private static final String SUPP_DELIM = ",";
     private static final int SUPP_FIELD_COUNT = 6;
 
+    public static final char SUPP_POS_STRAND = '+';
+    public static final char SUPP_NEG_STRAND = '-';
+
     public static SupplementaryReadData from(final String suppData)
     {
+        if(suppData == null)
+            return null;
+
         // example data: 21;42870046;-;46S30M;255;0;
         final String delim = suppData.contains(SUPP_DELIM) ? SUPP_DELIM : ";";
         final String[] items = suppData.split(delim);
