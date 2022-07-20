@@ -1,15 +1,19 @@
 package com.hartwig.hmftools.svprep;
 
 import static java.lang.Math.max;
+import static java.lang.String.format;
 
 import static com.hartwig.hmftools.common.utils.ConfigUtils.setLogLevel;
 import static com.hartwig.hmftools.svprep.SvCommon.SV_LOGGER;
 import static com.hartwig.hmftools.svprep.SvConfig.createCmdLineOptions;
-import static com.hartwig.hmftools.svprep.WriteType.BAM;
-import static com.hartwig.hmftools.svprep.WriteType.READS;
 
+import java.util.List;
+
+import com.google.common.collect.Lists;
 import com.hartwig.hmftools.common.genome.chromosome.HumanChromosome;
+import com.hartwig.hmftools.common.utils.PerformanceCounter;
 import com.hartwig.hmftools.common.utils.version.VersionInfo;
+import com.hartwig.hmftools.svprep.reads.PartitionStats;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -29,15 +33,19 @@ public class SvPrepApplication
     {
         mConfig = new SvConfig(cmd);
         mWriter = new ResultsWriter(mConfig);
-        mCombinedReadGroups = new CombinedReadGroups();
+        mCombinedReadGroups = new CombinedReadGroups(mConfig);
     }
 
     public void run()
     {
         SV_LOGGER.info("sample({}) starting SV prep", mConfig.SampleId);
 
+        long startTimeMs = System.currentTimeMillis();
+
         if(mConfig.CalcFragmentLength)
             calcFragmentDistribution();
+
+        CombinedStats combinedStats = new CombinedStats();
 
         for(HumanChromosome chromosome : HumanChromosome.values())
         {
@@ -50,14 +58,37 @@ public class SvPrepApplication
 
             ChromosomeTask chromosomeTask = new ChromosomeTask(chromosomeStr, mConfig, mCombinedReadGroups, mWriter);
             chromosomeTask.process();
+            combinedStats.addPartitionStats(chromosomeTask.combinedStats().ReadStats);
+
+            if(combinedStats.PerfCounters.isEmpty())
+            {
+                combinedStats.PerfCounters.addAll(chromosomeTask.combinedStats().PerfCounters);
+            }
+            else
+            {
+                for(int i = 0; i < chromosomeTask.combinedStats().PerfCounters.size(); ++i)
+                {
+                    combinedStats.PerfCounters.get(i).merge(chromosomeTask.combinedStats().PerfCounters.get((i)));
+                }
+            }
+
             System.gc();
         }
 
-        mCombinedReadGroups.writeRemainingReadGroups(mWriter, mConfig.WriteTypes);
+        mCombinedReadGroups.writeRemainingReadGroups(mWriter);
 
         mWriter.close();
 
-        SV_LOGGER.info("SV prep complete");
+        long timeTakenMs = System.currentTimeMillis() - startTimeMs;
+        double timeTakeMins = timeTakenMs / 60000.0;
+
+        if(combinedStats.ReadStats.TotalReads > 10000 || timeTakenMs > 10000)
+        {
+            SV_LOGGER.info("final stats: {}", combinedStats.ReadStats.toString());
+            combinedStats.PerfCounters.forEach(x -> x.logStats());
+        }
+
+        SV_LOGGER.info("SV Prep complete, mins({})", format("%.3f", timeTakeMins));
     }
 
     private void calcFragmentDistribution()

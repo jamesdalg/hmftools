@@ -35,10 +35,13 @@ public class ReadFilters
         if(record.getMappingQuality() < mConfig.MinMapQuality)
             filters |= ReadFilterType.MIN_MAP_QUAL.flag();
 
-        int insertAlignmentOverlap = abs(abs(record.getInferredInsertSize()) - alignedBases);
+        if(!record.getMateUnmappedFlag() && !record.getReadUnmappedFlag())
+        {
+            int insertAlignmentOverlap = abs(abs(record.getInferredInsertSize()) - alignedBases);
 
-        if(insertAlignmentOverlap < mConfig.MinInsertAlignmentOverlap)
-            filters |= ReadFilterType.INSERT_MAP_OVERLAP.flag();
+            if(insertAlignmentOverlap < mConfig.MinInsertAlignmentOverlap)
+                filters |= ReadFilterType.INSERT_MAP_OVERLAP.flag();
+        }
 
         int maxIndelLength = ReadRecord.maxIndelLength(record.getCigar());
 
@@ -75,12 +78,24 @@ public class ReadFilters
 
     public boolean isCandidateSupportingRead(final SAMRecord record)
     {
+        if(isChimericRead(record, mConfig))
+            return true;
+
+        // or with any amount of soft-clipping
+        return record.getCigar().isLeftClipped() || record.getCigar().isRightClipped();
+    }
+
+    public static boolean isChimericRead(final SAMRecord record, final ReadFilterConfig config)
+    {
+        if(record.getReadUnmappedFlag())
+            return false;
+
         // any read with a supplementary
         if(record.hasAttribute(SUPPLEMENTARY_ATTRIBUTE))
             return true;
 
         // or an fragment length beyond the observed distribution
-        if(abs(record.getInferredInsertSize()) > mConfig.fragmentLengthMax()) //  || record.getInferredInsertSize() < mFragmentLengthMin
+        if(abs(record.getInferredInsertSize()) > config.fragmentLengthMax()) //  || record.getInferredInsertSize() < mFragmentLengthMin
             return true;
 
         // an unmapped mate
@@ -88,15 +103,13 @@ public class ReadFilters
             return true;
 
         // interchromosomal
-        if(!record.getContig().equals(record.getMateReferenceName()))
+        if(!record.getReferenceName().equals(record.getMateReferenceName()))
             return true;
 
         // inversion
         if(record.getReadNegativeStrandFlag() == record.getMateNegativeStrandFlag())
             return true;
 
-        // or with any amount of soft-clipping
-        return record.getCigar().isLeftClipped() || record.getCigar().isRightClipped();
+        return false;
     }
-
 }

@@ -1,6 +1,7 @@
 package com.hartwig.hmftools.svprep;
 
 import static com.hartwig.hmftools.common.test.MockRefGenome.generateRandomBases;
+import static com.hartwig.hmftools.svprep.SvPrepTestUtils.BLACKLIST_LOCATIONS;
 import static com.hartwig.hmftools.svprep.SvPrepTestUtils.CHR_1;
 import static com.hartwig.hmftools.svprep.SvPrepTestUtils.HOTSPOT_CACHE;
 import static com.hartwig.hmftools.svprep.SvPrepTestUtils.READ_FILTERS;
@@ -10,7 +11,9 @@ import static com.hartwig.hmftools.svprep.reads.ReadType.CANDIDATE_SUPPORT;
 import static com.hartwig.hmftools.svprep.reads.ReadType.JUNCTION;
 
 import static junit.framework.TestCase.assertEquals;
+import static junit.framework.TestCase.assertTrue;
 
+import com.hartwig.hmftools.common.utils.sv.BaseRegion;
 import com.hartwig.hmftools.common.utils.sv.ChrBaseRegion;
 import com.hartwig.hmftools.svprep.reads.JunctionTracker;
 import com.hartwig.hmftools.svprep.reads.ReadRecord;
@@ -28,7 +31,7 @@ public class JunctionsTest
     public JunctionsTest()
     {
         mPartitionRegion = new ChrBaseRegion(CHR_1, 1, 5000);
-        mJunctionTracker = new JunctionTracker(mPartitionRegion, READ_FILTERS, HOTSPOT_CACHE);
+        mJunctionTracker = new JunctionTracker(mPartitionRegion, READ_FILTERS, HOTSPOT_CACHE, BLACKLIST_LOCATIONS);
     }
 
     private void addRead(final ReadRecord read, final ReadType readType)
@@ -56,7 +59,7 @@ public class JunctionsTest
 
         addRead(suppRead1, CANDIDATE_SUPPORT);
 
-        // spanning read but with the junction still in the first bucket
+        // spanning read
         ReadRecord read3 = ReadRecord.from(createSamRecord(
                 readIdStr(++readId), CHR_1, 950, REF_BASES.substring(0, 100), "30S70M"));
 
@@ -84,7 +87,6 @@ public class JunctionsTest
         ReadRecord suppRead3 = ReadRecord.from(createSamRecord(
                 readIdStr(++readId), CHR_1, 990, REF_BASES.substring(0, 63), "60M3S"));
 
-        // partitionBuckets.findBucket(suppRead3.start()).addSupportingRead(suppRead3);
         addRead(suppRead3, CANDIDATE_SUPPORT);
 
         // and a junction in the next bucket but with a supporting read in the previous
@@ -106,10 +108,10 @@ public class JunctionsTest
         mJunctionTracker.createJunctions();
 
         assertEquals(4, mJunctionTracker.junctions().size());
-        assertEquals(1, mJunctionTracker.junctions().get(0).supportingReadCount());
-        assertEquals(1, mJunctionTracker.junctions().get(1).supportingReadCount());
-        assertEquals(1, mJunctionTracker.junctions().get(2).supportingReadCount());
-        assertEquals(1, mJunctionTracker.junctions().get(3).supportingReadCount());
+        assertEquals(1, mJunctionTracker.junctions().get(0).supportingFragmentCount());
+        assertEquals(1, mJunctionTracker.junctions().get(1).supportingFragmentCount());
+        assertEquals(3, mJunctionTracker.junctions().get(2).supportingFragmentCount());
+        assertEquals(4, mJunctionTracker.junctions().get(3).supportingFragmentCount());
     }
 
     @Test
@@ -179,5 +181,36 @@ public class JunctionsTest
 
         assertEquals(241, mJunctionTracker.junctions().get(2).Position);
         assertEquals(242, mJunctionTracker.junctions().get(3).Position);
+    }
+
+    @Test
+    public void testBlacklistRegions()
+    {
+        BLACKLIST_LOCATIONS.addRegion(CHR_1, new BaseRegion(500, 1500));
+
+        JunctionTracker junctionTracker = new JunctionTracker(mPartitionRegion, READ_FILTERS, HOTSPOT_CACHE, BLACKLIST_LOCATIONS);
+
+        int readId = 0;
+
+        ReadRecord read1 = ReadRecord.from(createSamRecord(
+                readIdStr(++readId), CHR_1, 800, REF_BASES.substring(0, 100), "30S70M"));
+
+        ReadRecord read2 = ReadRecord.from(createSamRecord(
+                readIdStr(readId), CHR_1, 820, REF_BASES.substring(20, 120), "100M"));
+
+        read1.setReadType(JUNCTION);
+        read2.setReadType(JUNCTION);
+        junctionTracker.processRead(read1);
+        junctionTracker.processRead(read2);
+
+        ReadRecord suppRead1 = ReadRecord.from(createSamRecord(
+                readIdStr(++readId), CHR_1, 800, REF_BASES.substring(0, 73), "3S70M"));
+
+        suppRead1.setReadType(CANDIDATE_SUPPORT);
+        junctionTracker.processRead(suppRead1);
+
+        junctionTracker.createJunctions();
+
+        assertTrue(junctionTracker.junctions().isEmpty());
     }
 }

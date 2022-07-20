@@ -13,7 +13,9 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 import com.google.common.collect.Lists;
 import com.hartwig.hmftools.common.genome.refgenome.RefGenomeCoordinates;
+import com.hartwig.hmftools.common.utils.PerformanceCounter;
 import com.hartwig.hmftools.common.utils.sv.ChrBaseRegion;
+import com.hartwig.hmftools.svprep.reads.PartitionStats;
 import com.hartwig.hmftools.svprep.reads.PartitionTask;
 import com.hartwig.hmftools.svprep.reads.PartitionThread;
 
@@ -52,6 +54,7 @@ public class ChromosomeTask implements AutoCloseable
     {
         return mChromosome;
     }
+    public CombinedStats combinedStats() { return mCombinedStats; }
 
     public void process()
     {
@@ -81,16 +84,10 @@ public class ChromosomeTask implements AutoCloseable
         SV_LOGGER.info("chromosome({}) {} regions complete, stats: {}",
                 mChromosome, regionCount, mCombinedStats.ReadStats.toString());
 
-        /*
-        if(mConfig.logPerfStats())
+        if(mCombinedStats.ReadStats.TotalReads > 10000)
         {
-            mRegionResults.logPerfCounters();
-            SV_LOGGER.debug("chromosome({}) max memory({})", mChromosome, mRegionResults.maxMemoryUsage());
+            mCombinedStats.PerfCounters.forEach(x -> x.logStats());
         }
-         */
-
-        // SV_LOGGER.info("chromosome({}) analysis complete", mChromosome);
-        mCombinedStats.PerfCounters.forEach(x -> x.logStats());
     }
 
     private List<ChrBaseRegion> partition(final String chromosome)

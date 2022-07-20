@@ -13,9 +13,19 @@ import static com.hartwig.hmftools.common.utils.sv.ChrBaseRegion.addSpecificChro
 import static com.hartwig.hmftools.common.utils.sv.ChrBaseRegion.loadSpecificChromsomesOrRegions;
 import static com.hartwig.hmftools.svprep.SvCommon.ITEM_DELIM;
 import static com.hartwig.hmftools.svprep.SvCommon.SV_LOGGER;
-import static com.hartwig.hmftools.svprep.SvConstants.DEFAULT_BUCKET_SIZE;
 import static com.hartwig.hmftools.svprep.SvConstants.DEFAULT_CHR_PARTITION_SIZE;
 import static com.hartwig.hmftools.svprep.SvConstants.DEFAULT_READ_LENGTH;
+import static com.hartwig.hmftools.svprep.SvConstants.JUNCTION_SUPPORT_CAP;
+import static com.hartwig.hmftools.svprep.SvConstants.MAX_DISCORDANT_READ_DISTANCE;
+import static com.hartwig.hmftools.svprep.SvConstants.MIN_ALIGNMENT_BASES;
+import static com.hartwig.hmftools.svprep.SvConstants.MIN_INDEL_LENGTH;
+import static com.hartwig.hmftools.svprep.SvConstants.MIN_INSERT_ALIGNMENT_OVERLAP;
+import static com.hartwig.hmftools.svprep.SvConstants.MIN_JUNCTION_SUPPORT;
+import static com.hartwig.hmftools.svprep.SvConstants.MIN_MAP_QUALITY;
+import static com.hartwig.hmftools.svprep.SvConstants.MIN_SOFT_CLIP_HIGH_QUAL_PERC;
+import static com.hartwig.hmftools.svprep.SvConstants.MIN_SOFT_CLIP_LENGTH;
+import static com.hartwig.hmftools.svprep.SvConstants.MIN_SOFT_CLIP_MIN_BASE_QUAL;
+import static com.hartwig.hmftools.svprep.SvConstants.MIN_SUPPORTING_READ_DISTANCE;
 
 import java.util.Arrays;
 import java.util.List;
@@ -38,14 +48,13 @@ public class SvConfig
     public final String SampleId;
     public final String BamFile;
     public final String RefGenomeFile;
-    // public final RefGenomeSource RefGenome;
     public final RefGenomeVersion RefGenVersion;
 
     public final ReadFilters ReadFiltering;
     public final HotspotCache Hotspots;
+    public final BlacklistLocations Blacklist;
 
     public final int PartitionSize;
-    public final int BucketSize;
     public final int ReadLength;
     public final boolean CalcFragmentLength;
 
@@ -59,6 +68,7 @@ public class SvConfig
     public final List<String> SpecificChromosomes;
     public final List<String> LogReadIds;
     public final int MaxPartitionReads;
+    public final boolean ApplyDownsampling;
     public final List<ChrBaseRegion> SpecificRegions;
 
     private boolean mIsValid;
@@ -67,6 +77,7 @@ public class SvConfig
     public static final String SAMPLE = "sample";
     private static final String BAM_FILE = "bam_file";
     private static final String KNOWN_FUSION_BED = "known_fusion_bed";
+    private static final String BLACKLIST_BED = "blacklist_bed";
 
     private static final String WRITE_TYPES = "write_types";
 
@@ -77,6 +88,7 @@ public class SvConfig
 
     private static final String LOG_READ_IDS = "log_read_ids";
     private static final String MAX_PARTITION_READS = "max_partition_reads";
+    private static final String APPLY_DOWNSAMPLING = "apply_downsampling";
 
     public SvConfig(final CommandLine cmd)
     {
@@ -97,10 +109,13 @@ public class SvConfig
 
         RefGenVersion = cmd.hasOption(REF_GENOME_VERSION) ? RefGenomeVersion.from(cmd.getOptionValue(REF_GENOME_VERSION)) : V37;
 
+        SV_LOGGER.info("refGenome({}), bam({})", RefGenVersion, BamFile);
+        SV_LOGGER.info("output({})", OutputDir);
+
         Hotspots = new HotspotCache(cmd.getOptionValue(KNOWN_FUSION_BED));
+        Blacklist = new BlacklistLocations(cmd.getOptionValue(BLACKLIST_BED));
 
         PartitionSize = DEFAULT_CHR_PARTITION_SIZE;
-        BucketSize = DEFAULT_BUCKET_SIZE;
 
         ReadLength = Integer.parseInt(cmd.getOptionValue(READ_LENGTH, String.valueOf(DEFAULT_READ_LENGTH)));
 
@@ -143,6 +158,7 @@ public class SvConfig
 
         Threads = Integer.parseInt(cmd.getOptionValue(THREADS, "1"));
         MaxPartitionReads = Integer.parseInt(cmd.getOptionValue(MAX_PARTITION_READS, "0"));
+        ApplyDownsampling = cmd.hasOption(APPLY_DOWNSAMPLING);
     }
 
     public boolean isValid() { return mIsValid; }
@@ -168,6 +184,47 @@ public class SvConfig
         return null;
     }
 
+    public SvConfig(int partitionSize)
+    {
+        mIsValid = true;
+        SampleId = "TEST";
+        BamFile = null;
+        RefGenomeFile = "";
+        OutputDir = null;
+        OutputId = null;
+
+        RefGenVersion = V37;
+
+        Hotspots = new HotspotCache(null);
+        Blacklist = new BlacklistLocations(null);
+
+        PartitionSize = partitionSize;
+
+        ReadLength = DEFAULT_READ_LENGTH;
+
+        ReadFiltering = new ReadFilters(new ReadFilterConfig(
+                MIN_ALIGNMENT_BASES,
+                MIN_MAP_QUALITY,
+                MIN_INSERT_ALIGNMENT_OVERLAP,
+                MIN_SOFT_CLIP_LENGTH,
+                MIN_SOFT_CLIP_MIN_BASE_QUAL,
+                MIN_SOFT_CLIP_HIGH_QUAL_PERC,
+                MIN_SUPPORTING_READ_DISTANCE,
+                MIN_INDEL_LENGTH,
+                MIN_JUNCTION_SUPPORT,
+                JUNCTION_SUPPORT_CAP,
+                MAX_DISCORDANT_READ_DISTANCE));
+
+        CalcFragmentLength = false;
+        WriteTypes = Sets.newHashSet();
+        SpecificChromosomes = Lists.newArrayList();
+        SpecificRegions = Lists.newArrayList();
+        LogReadIds = Lists.newArrayList();
+        Threads = 1;
+        MaxPartitionReads = 0;
+        ApplyDownsampling = false;
+    }
+
     public static Options createCmdLineOptions()
     {
         final Options options = new Options();
@@ -179,6 +236,7 @@ public class SvConfig
         options.addOption(REF_GENOME, true, REF_GENOME_CFG_DESC);
         options.addOption(REF_GENOME_VERSION, true, "Ref genome version - accepts 37 (default) or 38");
         options.addOption(KNOWN_FUSION_BED, true, "Known fusion hotspot BED file");
+        options.addOption(BLACKLIST_BED, true, "Blacklist regions BED file");
         options.addOption(READ_LENGTH, true, "Read length");
         options.addOption(CALC_FRAG_LENGTH, false, "Calculate distribution for fragment length");
         options.addOption(FRAG_LENGTH_RANGE, true, "Empirical fragment length range: Min:Max");
@@ -186,6 +244,7 @@ public class SvConfig
         addSpecificChromosomesRegionsConfig(options);
         options.addOption(LOG_READ_IDS, true, "Log specific read IDs, separated by ';'");
         options.addOption(MAX_PARTITION_READS, true, "Limit to stop processing reads in partition, for debug");
+        options.addOption(APPLY_DOWNSAMPLING, false, "Apply downsampling of reads in high-depth regions");
         options.addOption(THREADS, true, "Thread count");
         ReadFilterConfig.addCmdLineArgs(options);
 

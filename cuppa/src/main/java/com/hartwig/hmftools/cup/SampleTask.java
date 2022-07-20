@@ -2,17 +2,17 @@ package com.hartwig.hmftools.cup;
 
 import static java.lang.String.format;
 
+import static com.hartwig.hmftools.common.cuppa.DataTypes.DATA_TYPE_COMBINED;
+import static com.hartwig.hmftools.common.cuppa.DataTypes.DATA_TYPE_DNA_COMBINED;
+import static com.hartwig.hmftools.common.cuppa.DataTypes.DATA_TYPE_RNA_COMBINED;
 import static com.hartwig.hmftools.cup.CuppaConfig.CUP_LOGGER;
 import static com.hartwig.hmftools.cup.common.CupCalcs.calcCombinedClassifierScoreResult;
 import static com.hartwig.hmftools.cup.common.CupCalcs.calcCombinedFeatureResult;
 import static com.hartwig.hmftools.cup.common.CupCalcs.fillMissingCancerTypeValues;
 import static com.hartwig.hmftools.cup.common.CupConstants.COMBINED_DAMPEN_FACTOR;
-import static com.hartwig.hmftools.cup.common.CupConstants.DATA_TYPE_COMBINED;
-import static com.hartwig.hmftools.cup.common.CupConstants.DATA_TYPE_DNA_COMBINED;
-import static com.hartwig.hmftools.cup.common.CupConstants.DATA_TYPE_RNA_COMBINED;
 import static com.hartwig.hmftools.cup.common.CupConstants.DNA_DAMPEN_FACTOR;
 import static com.hartwig.hmftools.cup.common.CupConstants.RNA_DAMPEN_FACTOR;
-import static com.hartwig.hmftools.cup.common.ResultType.CLASSIFIER;
+import static com.hartwig.hmftools.common.cuppa.ResultType.CLASSIFIER;
 
 import java.util.List;
 import java.util.Map;
@@ -21,7 +21,7 @@ import java.util.concurrent.Callable;
 import java.util.stream.Collectors;
 
 import com.google.common.collect.Lists;
-import com.hartwig.hmftools.cup.common.CategoryType;
+import com.hartwig.hmftools.common.cuppa.CategoryType;
 import com.hartwig.hmftools.cup.common.CuppaClassifier;
 import com.hartwig.hmftools.cup.common.SampleData;
 import com.hartwig.hmftools.cup.common.SampleDataCache;

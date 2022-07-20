@@ -6,7 +6,6 @@ public final class SvConstants
 {
     // region processing
     public static final int DEFAULT_CHR_PARTITION_SIZE = 1000000;
-    public static final int DEFAULT_BUCKET_SIZE = 1000;
     public static final int DOWN_SAMPLE_FRACTION = 20; // split partition into segments
     public static final int DOWN_SAMPLE_THRESHOLD = 1_500_000; // per partition
 
@@ -22,9 +21,9 @@ public final class SvConstants
     public static final int LOW_BASE_QUALITY = 20;
 
     // supporting reads
-    public static final int JUNCTION_SUPPORT_CAP = 50;
+    public static final int JUNCTION_SUPPORT_CAP = 0; // no limit
     public static final int MIN_SUPPORTING_READ_DISTANCE = 50;
-    public static final int MAX_DISCORDANT_READ_DISTANCE = 800;
+    public static final int MAX_DISCORDANT_READ_DISTANCE = 1000;
 
     // final junction filtering
     public static final int SUPPORTING_READ_DISTANCE = 50;
@@ -36,11 +35,6 @@ public final class SvConstants
     public static final int MAX_FRAGMENT_LENGTH = 1500;
     public static final int DEFAULT_READ_LENGTH = 151;
 
-    // to confirm
-    public static short MULTI_MAP_QUALITY_THRESHOLD = 3; // multi-mapped fragments are given map quals of 3 or lower
-
-    // LINC00486 - has no genes surrounding it nor overlapping with it
     public static final ChrBaseRegion EXCLUDED_REGION_1_REF_37 = new ChrBaseRegion("2", 33141260, 33141700);
     public static final ChrBaseRegion EXCLUDED_REGION_1_REF_38 = new ChrBaseRegion("chr2", 32916190, 32916630);
-
 }

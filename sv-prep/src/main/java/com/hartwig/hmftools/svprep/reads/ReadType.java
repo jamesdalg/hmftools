@@ -5,5 +5,9 @@ public enum ReadType
     NO_SUPPORT,
     CANDIDATE_SUPPORT,
     SUPPORT,
-    JUNCTION;
+    EXACT_SUPPORT,
+    JUNCTION,
+    RECOVERED,
+    BLACKLIST,
+    UNMATCHED;
 }

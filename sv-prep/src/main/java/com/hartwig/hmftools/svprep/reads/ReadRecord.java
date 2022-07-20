@@ -8,7 +8,6 @@ import static com.hartwig.hmftools.common.utils.sv.StartEndIterator.SE_END;
 import static com.hartwig.hmftools.common.utils.sv.StartEndIterator.SE_START;
 import static com.hartwig.hmftools.common.utils.sv.SvCommonUtils.NEG_ORIENT;
 import static com.hartwig.hmftools.common.utils.sv.SvCommonUtils.POS_ORIENT;
-import static com.hartwig.hmftools.svprep.SvConstants.MULTI_MAP_QUALITY_THRESHOLD;
 import static com.hartwig.hmftools.svprep.reads.ReadType.NO_SUPPORT;
 
 import com.hartwig.hmftools.common.genome.chromosome.HumanChromosome;
@@ -26,7 +25,6 @@ public class ReadRecord
 
     public String MateChromosome;
     public int MatePosStart;
-    public short MapQuality;
 
     private final SAMRecord mRecord;
     private int mFragmentInsertSize;
@@ -34,24 +32,41 @@ public class ReadRecord
 
     private int mFilters;
     private ReadType mReadType;
+    private boolean mWritten;
 
     public static ReadRecord from(final SAMRecord record) { return new ReadRecord(record); }
 
     public ReadRecord(final SAMRecord record)
     {
         mRecord = record;
-        Chromosome = record.getReferenceName();
-        Positions = new int[] { record.getStart(), record.getEnd() };
-        MateChromosome = record.getMateReferenceName();
-        MatePosStart = record.getMateAlignmentStart();
 
-        //final String readId = record.isSecondaryAlignment() ? format("%s_%s",
-        //        record.getReadName(), record.getAttribute(SECONDARY_ATTRIBUTE)) : record.getReadName();
+        if(!record.getReadUnmappedFlag())
+        {
+            Chromosome = record.getReferenceName();
+            Positions = new int[] { record.getStart(), record.getEnd() };
+        }
+        else
+        {
+            Chromosome = "-1";
+            Positions = new int[] { 0, 0 };
+        }
+
+        if(!record.getMateUnmappedFlag())
+        {
+            MateChromosome = record.getMateReferenceName();
+            MatePosStart = record.getMateAlignmentStart();
+        }
+        else
+        {
+            MateChromosome = "-1";
+            MatePosStart = 0;
+        }
 
         mFragmentInsertSize = abs(record.getInferredInsertSize());
         mSupplementaryAlignment = SupplementaryReadData.from(record.getStringAttribute(SUPPLEMENTARY_ATTRIBUTE));
         mFilters = 0;
         mReadType = NO_SUPPORT;
+        mWritten = false;
     }
 
     public String id() { return mRecord.getReadName(); }
@@ -84,8 +99,9 @@ public class ReadRecord
     public boolean isReadReversed() { return ( mRecord.getFlags() & SAMFlag.READ_REVERSE_STRAND.intValue()) != 0; }
     public boolean isFirstOfPair() { return (mRecord.getFlags() & SAMFlag.FIRST_OF_PAIR.intValue()) != 0; }
     public boolean isSupplementaryAlignment() { return (mRecord.getFlags() & SAMFlag.SUPPLEMENTARY_ALIGNMENT.intValue()) != 0; }
+    public boolean isUnmapped() { return (mRecord.getFlags() & SAMFlag.READ_UNMAPPED.intValue()) != 0; }
+    public boolean isMateUnmapped() { return (mRecord.getFlags() & SAMFlag.MATE_UNMAPPED.intValue()) != 0; }
 
-    public boolean isDuplicate() { return (mRecord.getFlags() & SAMFlag.DUPLICATE_READ.intValue()) != 0; }
     public boolean hasFlag(final SAMFlag flag) { return (mRecord.getFlags() & flag.intValue()) != 0; }
 
     public SupplementaryReadData supplementaryAlignment() { return mSupplementaryAlignment; }
@@ -100,16 +116,18 @@ public class ReadRecord
     public void setReadType(ReadType type) { mReadType = type; }
     public ReadType readType() { return mReadType; }
 
+    public void setWritten() { mWritten = true; }
+    public boolean written() { return mWritten; }
+
     public short mapQuality() { return (short)mRecord.getMappingQuality(); }
-    public boolean isMultiMapped() { return mapQuality() <= MULTI_MAP_QUALITY_THRESHOLD; }
 
     public int fragmentInsertSize() { return mFragmentInsertSize; }
 
     public String toString()
     {
-        return format("coords(%s:%d-%d) cigar(%s) mate(%s:%d) id(%s) flags(first=%s supp=%s reversed=%s) hasSupp(%s)",
+        return format("coords(%s:%d-%d) cigar(%s) mate(%s:%d) id(%s) flags(first=%s supp=%s reversed=%s) hasSupp(%s) type(%s)",
                 Chromosome, start(), end(), cigar().toString(), MateChromosome, MatePosStart, id(),
-                isFirstOfPair(), isSupplementaryAlignment(), isReadReversed(), mSupplementaryAlignment != null);
+                isFirstOfPair(), isSupplementaryAlignment(), isReadReversed(), mSupplementaryAlignment != null, mReadType);
     }
 
     public static int maxIndelLength(final Cigar cigar)

@@ -1,5 +1,6 @@
 package com.hartwig.hmftools.svprep;
 
+import static com.hartwig.hmftools.svprep.SvCommon.SV_LOGGER;
 import static com.hartwig.hmftools.svprep.WriteType.BAM;
 
 import java.io.File;
@@ -7,8 +8,10 @@ import java.util.List;
 
 import com.hartwig.hmftools.svprep.reads.ReadRecord;
 
+import htsjdk.samtools.SAMFileHeader;
 import htsjdk.samtools.SAMFileWriter;
 import htsjdk.samtools.SAMFileWriterFactory;
+import htsjdk.samtools.SAMRecord;
 import htsjdk.samtools.SamReader;
 import htsjdk.samtools.SamReaderFactory;
 
@@ -16,11 +19,14 @@ public class BamWriter
 {
     private final SvConfig mConfig;
 
+    private int mRecordWriteCount;
     private SAMFileWriter mWriter;
+    private String mOutputBam;
 
     public BamWriter(final SvConfig config)
     {
         mConfig = config;
+        mRecordWriteCount = 0;
         mWriter = initialise();
     }
 
@@ -30,23 +36,30 @@ public class BamWriter
             return null;
 
         SamReader samReader = SamReaderFactory.makeDefault().referenceSequence(new File(mConfig.RefGenomeFile)).open(new File(mConfig.BamFile));
-        String outputBam = mConfig.formFilename(BAM);
+        mOutputBam = mConfig.formFilename(BAM);
 
-        return new SAMFileWriterFactory().makeBAMWriter(samReader.getFileHeader(), false, new File(outputBam));
+        SAMFileHeader fileHeader = samReader.getFileHeader().clone();
+        fileHeader.setSortOrder(SAMFileHeader.SortOrder.unsorted);
+
+        return new SAMFileWriterFactory().makeBAMWriter(fileHeader, false, new File(mOutputBam));
     }
 
-    public synchronized void writeRecords(final List<ReadRecord> reads)
+    public void writeRecord(final SAMRecord record)
     {
         if(mWriter == null)
             return;
 
-        reads.forEach(x -> mWriter.addAlignment(x.record()));
+        ++mRecordWriteCount;
+        mWriter.addAlignment(record);
     }
 
     public void close()
     {
         if(mWriter != null)
+        {
+            SV_LOGGER.info("{} records written to BAM: {}", mRecordWriteCount, mOutputBam);
             mWriter.close();
+        }
     }
 
 }

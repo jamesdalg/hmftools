@@ -1,5 +1,6 @@
 package com.hartwig.hmftools.svprep;
 
+import static com.hartwig.hmftools.common.utils.FileWriterUtils.createBufferedReader;
 import static com.hartwig.hmftools.common.utils.sv.SvCommonUtils.NEG_ORIENT;
 import static com.hartwig.hmftools.common.utils.sv.SvCommonUtils.POS_ORIENT;
 import static com.hartwig.hmftools.svprep.SvCommon.SV_LOGGER;
@@ -16,7 +17,7 @@ import com.hartwig.hmftools.common.utils.sv.ChrBaseRegion;
 
 public class HotspotCache
 {
-    private final Map<String, List<KnownHotspot>> mHotspotRegions; // keyed by chromosome start
+    private final Map<String,List<KnownHotspot>> mHotspotRegions; // keyed by chromosome start
 
     public HotspotCache(final String filename)
     {
@@ -46,23 +47,29 @@ public class HotspotCache
 
         try
         {
-            BufferedReader fileReader = new BufferedReader(new FileReader(filename));
+            BufferedReader fileReader = createBufferedReader(filename);
 
             int itemCount = 0;
-            String line = fileReader.readLine();
+            String line = "";
 
-            while(line != null)
+            while((line = fileReader.readLine()) != null)
             {
-                final String[] items = line.split("\t", -1);
+                final String[] values = line.split("\t", -1);
 
-                String chrStart = items[0];
-                String chrEnd = items[3];
+                if(values.length < 10)
+                {
+                    SV_LOGGER.error("invalid hotspot entry: {}", line);
+                    return;
+                }
 
-                ChrBaseRegion regionStart = new ChrBaseRegion(chrStart, Integer.parseInt(items[1]), Integer.parseInt(items[2]));
-                ChrBaseRegion regionEnd = new ChrBaseRegion(chrEnd, Integer.parseInt(items[4]), Integer.parseInt(items[5]));
-                Byte orientStart = items[8].equals("+") ? POS_ORIENT : NEG_ORIENT;
-                Byte orientEnd = items[9].equals("+") ? POS_ORIENT : NEG_ORIENT;
-                String geneInfo = items[6];
+                String chrStart = values[0];
+                String chrEnd = values[3];
+
+                ChrBaseRegion regionStart = new ChrBaseRegion(chrStart, Integer.parseInt(values[1]) + 1, Integer.parseInt(values[2]));
+                ChrBaseRegion regionEnd = new ChrBaseRegion(chrEnd, Integer.parseInt(values[4]) + 1, Integer.parseInt(values[5]));
+                Byte orientStart = values[8].equals("+") ? POS_ORIENT : NEG_ORIENT;
+                Byte orientEnd = values[9].equals("+") ? POS_ORIENT : NEG_ORIENT;
+                String geneInfo = values[6];
 
                 KnownHotspot knownHotspot = new KnownHotspot(regionStart, orientStart, regionEnd, orientEnd, geneInfo);
 
@@ -91,8 +98,6 @@ public class HotspotCache
                 }
 
                 ++itemCount;
-
-                line = fileReader.readLine();
             }
 
             SV_LOGGER.info("loaded {} known hotspot records from file", itemCount, filename);

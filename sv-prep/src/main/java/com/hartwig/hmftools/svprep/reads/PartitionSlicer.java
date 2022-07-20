@@ -1,9 +1,10 @@
 package com.hartwig.hmftools.svprep.reads;
 
+import static java.lang.String.format;
+
 import static com.hartwig.hmftools.common.genome.refgenome.RefGenomeVersion.V37;
 import static com.hartwig.hmftools.common.genome.refgenome.RefGenomeVersion.V38;
-import static com.hartwig.hmftools.svprep.CombinedReadGroups.externalReadChrPartition;
-import static com.hartwig.hmftools.svprep.CombinedReadGroups.formChromosomePartition;
+import static com.hartwig.hmftools.common.utils.PerformanceCounter.nanosToSeconds;
 import static com.hartwig.hmftools.svprep.SvCommon.SV_LOGGER;
 import static com.hartwig.hmftools.svprep.SvConstants.DOWN_SAMPLE_FRACTION;
 import static com.hartwig.hmftools.svprep.SvConstants.DOWN_SAMPLE_THRESHOLD;
@@ -11,13 +12,17 @@ import static com.hartwig.hmftools.svprep.SvConstants.EXCLUDED_REGION_1_REF_37;
 import static com.hartwig.hmftools.svprep.SvConstants.EXCLUDED_REGION_1_REF_38;
 import static com.hartwig.hmftools.svprep.WriteType.BAM;
 import static com.hartwig.hmftools.svprep.WriteType.READS;
+import static com.hartwig.hmftools.svprep.reads.ReadType.BLACKLIST;
 import static com.hartwig.hmftools.svprep.reads.ReadType.CANDIDATE_SUPPORT;
 import static com.hartwig.hmftools.svprep.reads.ReadType.JUNCTION;
+import static com.hartwig.hmftools.svprep.reads.ReadType.RECOVERED;
 
 import java.io.File;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
+import com.beust.jcommander.internal.Sets;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.hartwig.hmftools.common.samtools.BamSlicer;
@@ -29,7 +34,11 @@ import com.hartwig.hmftools.svprep.ResultsWriter;
 import com.hartwig.hmftools.svprep.SvConfig;
 import com.hartwig.hmftools.svprep.WriteType;
 
+import htsjdk.samtools.QueryInterval;
+import htsjdk.samtools.SAMFlag;
 import htsjdk.samtools.SAMRecord;
+import htsjdk.samtools.SAMRecordIterator;
+import htsjdk.samtools.SAMRecordSetBuilder;
 import htsjdk.samtools.SamReader;
 import htsjdk.samtools.SamReaderFactory;
 
@@ -58,7 +67,8 @@ public class PartitionSlicer
 
     private static final int PC_SLICE = 0;
     private static final int PC_JUNCTIONS = 1;
-    private static final int PC_TOTAL = 2;
+    private static final int PC_MATE_SLICE = 2;
+    private static final int PC_TOTAL = 3;
 
     public PartitionSlicer(
             final int id, final ChrBaseRegion region, final SvConfig config, final CombinedReadGroups combinedReadGroups,
@@ -72,16 +82,25 @@ public class PartitionSlicer
         mRegion = region;
         mCombinedStats = combinedStats;
 
-        mJunctionTracker = new JunctionTracker(mRegion, mConfig.ReadFiltering.config(), mConfig.Hotspots);
+        mJunctionTracker = new JunctionTracker(mRegion, mConfig.ReadFiltering.config(), mConfig.Hotspots, mConfig.Blacklist);
 
         mSamReader = mConfig.BamFile != null ?
                 SamReaderFactory.makeDefault().referenceSequence(new File(mConfig.RefGenomeFile)).open(new File(mConfig.BamFile)) : null;
 
         mBamSlicer = new BamSlicer(0, false, true, false);
+        mBamSlicer.setKeepUnmapped();
 
-        int rateSegmentLength = mConfig.PartitionSize / DOWN_SAMPLE_FRACTION;
-        int downsampleThreshold = DOWN_SAMPLE_THRESHOLD / DOWN_SAMPLE_FRACTION;
-        mReadRateTracker = new ReadRateTracker(rateSegmentLength, mRegion.start(), downsampleThreshold);
+        if(mConfig.ApplyDownsampling)
+        {
+            int rateSegmentLength = mConfig.PartitionSize / DOWN_SAMPLE_FRACTION;
+            int downsampleThreshold = DOWN_SAMPLE_THRESHOLD / DOWN_SAMPLE_FRACTION;
+            mReadRateTracker = new ReadRateTracker(rateSegmentLength, mRegion.start(), downsampleThreshold);
+        }
+        else
+        {
+            mReadRateTracker = null;
+        }
+
         mRateLimitTriggered = false;
 
         mFilterRegion = mConfig.RefGenVersion == V37 && region.overlaps(EXCLUDED_REGION_1_REF_37) ? EXCLUDED_REGION_1_REF_37
@@ -92,6 +111,7 @@ public class PartitionSlicer
         mPerCounters = new PerformanceCounter[PC_TOTAL+1];
         mPerCounters[PC_SLICE] = new PerformanceCounter("Slice");
         mPerCounters[PC_JUNCTIONS] = new PerformanceCounter("Junctions");
+        mPerCounters[PC_MATE_SLICE] = new PerformanceCounter("UnmatchedSlice");
         mPerCounters[PC_TOTAL] = new PerformanceCounter("Total");
 
         mLogReadIds = !mConfig.LogReadIds.isEmpty();
@@ -109,12 +129,6 @@ public class PartitionSlicer
 
         mPerCounters[PC_SLICE].stop();
 
-        if(mStats.TotalReads == 0)
-        {
-            mPerCounters[PC_TOTAL].stop();
-            return;
-        }
-
         mPerCounters[PC_JUNCTIONS].start();
 
         mJunctionTracker.createJunctions();
@@ -124,15 +138,18 @@ public class PartitionSlicer
 
         writeData();
 
-        SV_LOGGER.debug("region({}) complete, stats({})", mRegion, mStats.toString());
-        SV_LOGGER.debug("region({}) filters({})", mRegion, ReadFilterType.filterCountsToString(mStats.ReadFilterCounts));
+        if(mStats.TotalReads > 0)
+        {
+            SV_LOGGER.debug("region({}) complete, stats({})", mRegion, mStats.toString());
+            SV_LOGGER.debug("region({}) filters({})", mRegion, ReadFilterType.filterCountsToString(mStats.ReadFilterCounts));
+        }
 
         mPerCounters[PC_TOTAL].stop();
 
         mCombinedStats.addPartitionStats(mStats);
         mCombinedStats.addPerfCounters(mPerCounters);
 
-        if(mRateLimitTriggered || mStats.TotalReads > DOWN_SAMPLE_THRESHOLD / 10)
+        if(mRateLimitTriggered)
             System.gc();
     }
 
@@ -146,6 +163,9 @@ public class PartitionSlicer
             return;
 
         ++mStats.TotalReads;
+
+        if(mStats.TotalReads > 0 && (mStats.TotalReads % 1_000_000) == 0)
+            System.gc();
 
         if(mFilterRegion != null)
         {
@@ -163,12 +183,12 @@ public class PartitionSlicer
         if(mLogReadIds) // debugging only
         {
             if(mConfig.LogReadIds.contains(record.getReadName()))
-                SV_LOGGER.debug("specific readId({})", record.getReadName());
+                SV_LOGGER.debug("specific readId({}) unmapped({})", record.getReadName(), record.getReadUnmappedFlag());
             else if(LOG_READ_ONLY)
                 return;
         }
 
-        if(!checkReadRateLimits(readStart))
+        if(readStart > 0 && !checkReadRateLimits(readStart))
             return;
 
         int filters = mReadFilters.checkFilters(record);
@@ -217,37 +237,46 @@ public class PartitionSlicer
 
     private void writeData()
     {
-        boolean reconcileReadGroups = mConfig.WriteTypes.contains(BAM) || mConfig.WriteTypes.contains(READS);
+        boolean captureCompleteGroups = mConfig.WriteTypes.contains(BAM) || mConfig.WriteTypes.contains(READS);
 
-        if(reconcileReadGroups)
+        if(captureCompleteGroups)
         {
-            // the BAM file writes records by readId, so needs to combine all reads for a given fragment
-            Map<String,Map<String,ReadGroup>> partialGroupsMap = Maps.newHashMap();
-            List<ReadGroup> localGroups = Lists.newArrayList();
+            // read groups that span chromosomes or partitions need to be complete, so gather up their state to enable this
+            Map<String,ReadGroup> spanningGroupsMap = Maps.newHashMap();
 
-            String chrPartition = formChromosomePartition(mRegion.Chromosome, mRegion.start(), mConfig.PartitionSize);
+            mJunctionTracker.junctionGroups().forEach(x -> assignReadGroup(x, spanningGroupsMap));
+            mJunctionTracker.supportingGroups().forEach(x -> assignReadGroup(x, spanningGroupsMap));
 
-            mJunctionTracker.junctionGroups().forEach(x -> assignReadGroup(x, chrPartition, partialGroupsMap, localGroups));
-            mJunctionTracker.supportingGroups().forEach(x -> assignReadGroup(x, chrPartition, partialGroupsMap, localGroups));
+            int spanningGroups = spanningGroupsMap.size();
+            int totalGroups = mJunctionTracker.junctionGroups().size() + mJunctionTracker.supportingGroups().size();
 
-            List<ReadGroup> remoteCompleteGroups = mCombinedReadGroups.addIncompleteReadGroup(chrPartition, partialGroupsMap);
+            final Map<String, List<ExpectedRead>> missedReadsMap = Maps.newHashMap();
+            mCombinedReadGroups.processSpanningReadGroups(mRegion, spanningGroupsMap, missedReadsMap);
 
-            int localIncomplete = (int)localGroups.stream().filter(x -> x.isIncomplete()).count();
+            mPerCounters[PC_MATE_SLICE].start();
+            List<ReadGroup> recoveredReadGroups = findMissedReads(missedReadsMap);
+            mPerCounters[PC_MATE_SLICE].stop();
 
-            SV_LOGGER.debug("region({}) readGroups({}) complete(local={} remote={}) partials({}) localIncomplete({})",
-                    mRegion, mJunctionTracker.junctionGroups().size() + mJunctionTracker.supportingGroups().size(),
-                    localGroups.size(), remoteCompleteGroups.size(), partialGroupsMap.size(), localIncomplete);
+            if(totalGroups == 0 && missedReadsMap.isEmpty())
+                return;
 
-            if( mConfig.WriteTypes.contains(BAM))
+            int matchedReads = spanningGroupsMap.values().stream().mapToInt(x -> (int)x.reads().stream().filter(y -> y.written()).count()).sum();
+
+            SV_LOGGER.debug("region({}) readGroups({}) complete(local={} spanning={}) matchedReads({})",
+                    mRegion, totalGroups, totalGroups - spanningGroups, spanningGroups, matchedReads);
+
+            if(mConfig.WriteTypes.contains(BAM))
             {
-                mWriter.writeBamRecords(localGroups);
-                mWriter.writeBamRecords(remoteCompleteGroups);
+                mWriter.writeBamRecords(mJunctionTracker.junctionGroups());
+                mWriter.writeBamRecords(mJunctionTracker.supportingGroups());
+                mWriter.writeBamRecords(recoveredReadGroups);
             }
 
             if(mConfig.WriteTypes.contains(READS))
             {
-                mWriter.writeReadData(localGroups);
-                mWriter.writeReadData(remoteCompleteGroups);
+                mWriter.writeReadGroup(mJunctionTracker.junctionGroups());
+                mWriter.writeReadGroup(mJunctionTracker.supportingGroups());
+                mWriter.writeReadGroup(recoveredReadGroups);
             }
         }
 
@@ -262,41 +291,155 @@ public class PartitionSlicer
         mStats.InitialSupportingFragmentCount += mJunctionTracker.initialSupportingFrags();
     }
 
-    private void assignReadGroup(
-            final ReadGroup readGroup, final String chrPartition,
-            final Map<String,Map<String,ReadGroup>> partialGroupsMap,final List<ReadGroup> localGroups)
+    private void assignReadGroup(final ReadGroup readGroup, Map<String,ReadGroup> partialGroupsMap)
     {
-        readGroup.setGroupStatus(mRegion);
+        readGroup.setPartitionCount(mRegion, mConfig.PartitionSize);
 
-        if(readGroup.spansPartitions())
+        if(readGroup.spansPartitions() && !readGroup.onlySupplementaries())
         {
-            String remoteChrPartition = externalReadChrPartition(mRegion, mConfig.PartitionSize, readGroup.reads());
+            // only register remote reads if they are not supplementaries - instead just let these be written locally and not reconciled
+            ++mStats.SpanningGroups;
 
-            if(remoteChrPartition == null || remoteChrPartition.equals(chrPartition))
-            {
-                // missing a read local to this partition
-                localGroups.add(readGroup);
-                return;
-            }
-
-            Map<String,ReadGroup> groups = partialGroupsMap.get(remoteChrPartition);
-
-            if(groups == null)
-            {
-                groups = Maps.newHashMap();
-                partialGroupsMap.put(remoteChrPartition, groups);
-            }
-
-            groups.put(readGroup.id(), readGroup);
+            readGroup.setGroupState();
+            partialGroupsMap.put(readGroup.id(), readGroup);
         }
         else
         {
-            localGroups.add(readGroup);
+            readGroup.setGroupState();
+
+            if(readGroup.isComplete())
+                ++mStats.LocalCompleteGroups;
+            else
+                ++mStats.LocalIncompleteGroups;
         }
+    }
+
+    private static final int MAX_MISSED_READ_DEPTH = 100000;
+
+    private List<ReadGroup> findMissedReads(final Map<String,List<ExpectedRead>> missedReadsMap)
+    {
+        List<ReadGroup> readGroups = Lists.newArrayList();
+
+        if(missedReadsMap.isEmpty())
+            return readGroups;
+
+        int missedReadCount = missedReadsMap.values().stream().mapToInt(x -> x.size()).sum();
+        SV_LOGGER.trace("region({}) searching for {} missed reads", mRegion, missedReadCount);
+
+        // ignore reads in blacklist locations
+        int skippedBlacklist = 0;
+
+        // form 2 lists both order by missed read position
+        Map<Integer,List<ExpectedRead>> positionReads = Maps.newHashMap();
+        Map<Integer,List<String>> positionReadIds = Maps.newHashMap();
+
+        for(Map.Entry<String, List<ExpectedRead>> entry : missedReadsMap.entrySet())
+        {
+            String readId = entry.getKey();
+
+            for(ExpectedRead missedRead : entry.getValue())
+            {
+                boolean inBlacklist = mConfig.Blacklist.inBlacklistLocation(
+                        missedRead.Chromosome, missedRead.Position, missedRead.Position + mConfig.ReadLength);
+
+                if(inBlacklist)
+                {
+                    ++skippedBlacklist;
+                    continue;
+                }
+
+                List<ExpectedRead> posReads = positionReads.get(missedRead.Position);
+                if(posReads == null)
+                {
+                    positionReads.put(missedRead.Position, Lists.newArrayList(missedRead));
+                    positionReadIds.put(missedRead.Position, Lists.newArrayList(readId));
+                }
+                else
+                {
+                    posReads.add(missedRead);
+                    positionReadIds.get(missedRead.Position).add(readId);
+                }
+            }
+        }
+
+        for(Map.Entry<Integer,List<ExpectedRead>> entry : positionReads.entrySet())
+        {
+            int position = entry.getKey();
+            List<ExpectedRead> missedReads = entry.getValue();
+            List<String> missedReadIds = positionReadIds.get(position);
+
+            long startTime = System.nanoTime();
+
+            findMissedReads(readGroups, position, missedReads, missedReadIds);
+
+            double sliceTime = nanosToSeconds(startTime, System.nanoTime());
+
+            if(sliceTime > 2)
+            {
+                SV_LOGGER.debug("slice time({}) for {} missed reads, location({}:{})",
+                        format("%.3f", sliceTime), missedReadIds.size(), mRegion.Chromosome, position);
+            }
+        }
+
+        readGroups.forEach(x -> x.setGroupState());
+
+        if(missedReadsMap.size() != readGroups.size())
+        {
+            SV_LOGGER.debug("region({}) missed reads({}) recovered({}) blacklisted({})",
+                    mRegion, missedReadsMap.size(), readGroups.size(), skippedBlacklist);
+        }
+
+        return readGroups;
+    }
+
+    private void findMissedReads(
+            List<ReadGroup> readGroups, int position, final List<ExpectedRead> missedReads, final List<String> missedReadIds)
+    {
+        final SAMRecordIterator iterator = mSamReader.queryAlignmentStart(mRegion.Chromosome, position);
+
+        int readCount = 0;
+        while(iterator.hasNext())
+        {
+            final SAMRecord record = iterator.next();
+            ++readCount;
+
+            if(readCount >= MAX_MISSED_READ_DEPTH)
+                break;
+
+            for(int i = 0; i < missedReads.size(); ++i)
+            {
+                if(missedReadIds.get(i).equals(record.getReadName()))
+                {
+                    ExpectedRead missedRead = missedReads.get(i);
+
+                    if(missedRead.FirstInPair != record.getFirstOfPairFlag())
+                        continue;
+
+                    if(missedRead.IsSupplementary != record.getSupplementaryAlignmentFlag())
+                        continue;
+
+                    ReadRecord read = ReadRecord.from(record);
+                    read.setReadType(RECOVERED);
+                    readGroups.add(new ReadGroup(read));
+
+                    missedReads.remove(i);
+                    missedReadIds.remove(i);
+                    break;
+                }
+            }
+
+            if(missedReads.isEmpty())
+                break;
+        }
+
+        iterator.close();
     }
 
     private boolean checkReadRateLimits(int positionStart)
     {
+        if(mReadRateTracker == null)
+            return true;
+
         boolean wasLimited = mReadRateTracker.isRateLimited();
         int lastSegementReadCount = mReadRateTracker.readCount();
 
