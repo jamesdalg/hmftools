@@ -1,6 +1,7 @@
 package com.hartwig.hmftools.protect.characteristic;
 
 import com.hartwig.hmftools.serve.actionability.characteristic.ActionableCharacteristic;
+import com.hartwig.hmftools.serve.extraction.characteristic.TumorCharacteristicsComparator;
 
 import org.jetbrains.annotations.NotNull;
 

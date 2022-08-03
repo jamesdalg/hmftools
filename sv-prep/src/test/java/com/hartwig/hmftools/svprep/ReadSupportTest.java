@@ -12,11 +12,14 @@ import static com.hartwig.hmftools.svprep.SvPrepTestUtils.createSamRecord;
 import static com.hartwig.hmftools.svprep.SvPrepTestUtils.readIdStr;
 import static com.hartwig.hmftools.svprep.reads.JunctionTracker.hasDiscordantJunctionSupport;
 import static com.hartwig.hmftools.svprep.reads.JunctionTracker.hasExactJunctionSupport;
+import static com.hartwig.hmftools.svprep.reads.ReadFilterType.INSERT_MAP_OVERLAP;
+import static com.hartwig.hmftools.svprep.reads.ReadFilterType.SOFT_CLIP_LENGTH;
 
 import static junit.framework.TestCase.assertFalse;
 import static junit.framework.TestCase.assertTrue;
 
 import com.hartwig.hmftools.svprep.reads.JunctionData;
+import com.hartwig.hmftools.svprep.reads.ReadFilterType;
 import com.hartwig.hmftools.svprep.reads.ReadRecord;
 
 import org.junit.Test;
@@ -178,6 +181,27 @@ public class ReadSupportTest
         assertFalse(hasDiscordantJunctionSupport(supportRead, junctionData, READ_FILTERS));
     }
 
+    @Test
+    public void testReadFilterFlags()
+    {
+        int filters = 0;
+        filters = ReadFilterType.set(filters, SOFT_CLIP_LENGTH);
+        assertTrue(ReadFilterType.isSet(filters, SOFT_CLIP_LENGTH));
+        assertFalse(ReadFilterType.isSet(filters, INSERT_MAP_OVERLAP));
+
+        filters = ReadFilterType.set(filters, INSERT_MAP_OVERLAP);
+        assertTrue(ReadFilterType.isSet(filters, SOFT_CLIP_LENGTH));
+        assertTrue(ReadFilterType.isSet(filters, INSERT_MAP_OVERLAP));
+
+        filters = ReadFilterType.unset(filters, SOFT_CLIP_LENGTH);
+        assertFalse(ReadFilterType.isSet(filters, SOFT_CLIP_LENGTH));
+        assertTrue(ReadFilterType.isSet(filters, INSERT_MAP_OVERLAP));
+
+        filters = ReadFilterType.unset(filters, INSERT_MAP_OVERLAP);
+        assertFalse(ReadFilterType.isSet(filters, SOFT_CLIP_LENGTH));
+        assertFalse(ReadFilterType.isSet(filters, INSERT_MAP_OVERLAP));
+    }
+
     private static ReadRecord createRead(
             final String readId, int readStart, boolean firstInPair, boolean reversed)
     {
@@ -186,6 +210,4 @@ public class ReadSupportTest
                 buildFlags(firstInPair, reversed, false, false, false),
                 DEFAULT_MAP_QUAL, DEFAULT_BASE_QUAL));
     }
-
-
 }

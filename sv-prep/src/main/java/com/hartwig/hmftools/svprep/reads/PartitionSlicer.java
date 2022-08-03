@@ -2,27 +2,22 @@ package com.hartwig.hmftools.svprep.reads;
 
 import static java.lang.String.format;
 
-import static com.hartwig.hmftools.common.genome.refgenome.RefGenomeVersion.V37;
-import static com.hartwig.hmftools.common.genome.refgenome.RefGenomeVersion.V38;
+import static com.hartwig.hmftools.common.sv.ExcludedRegions.getPolyGRegion;
 import static com.hartwig.hmftools.common.utils.PerformanceCounter.nanosToSeconds;
 import static com.hartwig.hmftools.svprep.SvCommon.SV_LOGGER;
 import static com.hartwig.hmftools.svprep.SvConstants.DOWN_SAMPLE_FRACTION;
 import static com.hartwig.hmftools.svprep.SvConstants.DOWN_SAMPLE_THRESHOLD;
-import static com.hartwig.hmftools.svprep.SvConstants.EXCLUDED_REGION_1_REF_37;
-import static com.hartwig.hmftools.svprep.SvConstants.EXCLUDED_REGION_1_REF_38;
 import static com.hartwig.hmftools.svprep.WriteType.BAM;
 import static com.hartwig.hmftools.svprep.WriteType.READS;
-import static com.hartwig.hmftools.svprep.reads.ReadType.BLACKLIST;
 import static com.hartwig.hmftools.svprep.reads.ReadType.CANDIDATE_SUPPORT;
+import static com.hartwig.hmftools.svprep.reads.ReadType.EXPECTED;
 import static com.hartwig.hmftools.svprep.reads.ReadType.JUNCTION;
 import static com.hartwig.hmftools.svprep.reads.ReadType.RECOVERED;
 
 import java.io.File;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
-import com.beust.jcommander.internal.Sets;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.hartwig.hmftools.common.samtools.BamSlicer;
@@ -30,15 +25,13 @@ import com.hartwig.hmftools.common.utils.PerformanceCounter;
 import com.hartwig.hmftools.common.utils.sv.ChrBaseRegion;
 import com.hartwig.hmftools.svprep.CombinedReadGroups;
 import com.hartwig.hmftools.svprep.CombinedStats;
+import com.hartwig.hmftools.svprep.ExistingJunctionCache;
 import com.hartwig.hmftools.svprep.ResultsWriter;
 import com.hartwig.hmftools.svprep.SvConfig;
 import com.hartwig.hmftools.svprep.WriteType;
 
-import htsjdk.samtools.QueryInterval;
-import htsjdk.samtools.SAMFlag;
 import htsjdk.samtools.SAMRecord;
 import htsjdk.samtools.SAMRecordIterator;
-import htsjdk.samtools.SAMRecordSetBuilder;
 import htsjdk.samtools.SamReader;
 import htsjdk.samtools.SamReaderFactory;
 
@@ -72,7 +65,7 @@ public class PartitionSlicer
 
     public PartitionSlicer(
             final int id, final ChrBaseRegion region, final SvConfig config, final CombinedReadGroups combinedReadGroups,
-            final ResultsWriter writer, final CombinedStats combinedStats)
+            final ExistingJunctionCache existingJunctionCache, final ResultsWriter writer, final CombinedStats combinedStats)
     {
         mId = id;
         mConfig = config;
@@ -82,7 +75,9 @@ public class PartitionSlicer
         mRegion = region;
         mCombinedStats = combinedStats;
 
-        mJunctionTracker = new JunctionTracker(mRegion, mConfig.ReadFiltering.config(), mConfig.Hotspots, mConfig.Blacklist);
+        mJunctionTracker = new JunctionTracker(mRegion, mConfig, mConfig.Hotspots, mConfig.Blacklist);
+
+        mJunctionTracker.addExistingJunctions(existingJunctionCache.getRegionJunctions(mRegion));
 
         mSamReader = mConfig.BamFile != null ?
                 SamReaderFactory.makeDefault().referenceSequence(new File(mConfig.RefGenomeFile)).open(new File(mConfig.BamFile)) : null;
@@ -103,8 +98,8 @@ public class PartitionSlicer
 
         mRateLimitTriggered = false;
 
-        mFilterRegion = mConfig.RefGenVersion == V37 && region.overlaps(EXCLUDED_REGION_1_REF_37) ? EXCLUDED_REGION_1_REF_37
-                : (mConfig.RefGenVersion == V38 && region.overlaps(EXCLUDED_REGION_1_REF_38) ? EXCLUDED_REGION_1_REF_38 : null);
+        ChrBaseRegion excludedRegion = getPolyGRegion(mConfig.RefGenVersion);
+        mFilterRegion = region.overlaps(excludedRegion) ? excludedRegion : null;
 
         mStats = new PartitionStats();
 
@@ -131,7 +126,9 @@ public class PartitionSlicer
 
         mPerCounters[PC_JUNCTIONS].start();
 
-        mJunctionTracker.createJunctions();
+        mJunctionTracker.setExpectedReads(mCombinedReadGroups.getExpectedReadIds(mRegion));
+
+        mJunctionTracker.assignFragments();
         mJunctionTracker.filterJunctions();
 
         mPerCounters[PC_JUNCTIONS].stop();
@@ -141,7 +138,6 @@ public class PartitionSlicer
         if(mStats.TotalReads > 0)
         {
             SV_LOGGER.debug("region({}) complete, stats({})", mRegion, mStats.toString());
-            SV_LOGGER.debug("region({}) filters({})", mRegion, ReadFilterType.filterCountsToString(mStats.ReadFilterCounts));
         }
 
         mPerCounters[PC_TOTAL].stop();
@@ -193,21 +189,18 @@ public class PartitionSlicer
 
         int filters = mReadFilters.checkFilters(record);
 
-        if(filters != 0)
+        if(filters == 0 || filters == ReadFilterType.MIN_MAP_QUAL.flag()) // allow reads only filtered by low map quality through
         {
-            // allow low map quality through at this stage
-            if(filters != ReadFilterType.MIN_MAP_QUAL.flag())
-            {
-                processFilteredRead(record, filters);
-                return;
-            }
+            ReadRecord read = ReadRecord.from(record);
+            read.setFilters(filters);
+            read.setReadType(JUNCTION);
+
+            mJunctionTracker.processRead(read);
         }
-
-        ReadRecord read = ReadRecord.from(record);
-        read.setFilters(filters);
-        read.setReadType(JUNCTION);
-
-        mJunctionTracker.processRead(read);
+        else
+        {
+            processFilteredRead(record, filters);
+        }
     }
 
     private void processFilteredRead(final SAMRecord record, final int filters)
@@ -221,9 +214,9 @@ public class PartitionSlicer
         }
 
         // check for any evidence of support for an SV
-        boolean isSupportCandidate = mReadFilters.isCandidateSupportingRead(record);
+        boolean isSupportCandidate = mReadFilters.isCandidateSupportingRead(record, filters);
 
-        if(!isSupportCandidate && !mConfig.WriteTypes.contains(BAM))
+        if(!isSupportCandidate && !mConfig.writeReads())
             return;
 
         ReadRecord read = ReadRecord.from(record);
@@ -237,7 +230,7 @@ public class PartitionSlicer
 
     private void writeData()
     {
-        boolean captureCompleteGroups = mConfig.WriteTypes.contains(BAM) || mConfig.WriteTypes.contains(READS);
+        boolean captureCompleteGroups = mConfig.writeReads();
 
         if(captureCompleteGroups)
         {
@@ -247,8 +240,12 @@ public class PartitionSlicer
             mJunctionTracker.junctionGroups().forEach(x -> assignReadGroup(x, spanningGroupsMap));
             mJunctionTracker.supportingGroups().forEach(x -> assignReadGroup(x, spanningGroupsMap));
 
+            List<ReadGroup> expectedGroups = mJunctionTracker.expectedGroups();
+            expectedGroups.forEach(x -> assignReadGroup(x, spanningGroupsMap));
+            expectedGroups.forEach(x -> x.reads().forEach(y -> y.setReadType(EXPECTED)));
+
             int spanningGroups = spanningGroupsMap.size();
-            int totalGroups = mJunctionTracker.junctionGroups().size() + mJunctionTracker.supportingGroups().size();
+            int totalGroups = mJunctionTracker.junctionGroups().size() + mJunctionTracker.supportingGroups().size() + expectedGroups.size();
 
             final Map<String, List<ExpectedRead>> missedReadsMap = Maps.newHashMap();
             mCombinedReadGroups.processSpanningReadGroups(mRegion, spanningGroupsMap, missedReadsMap);
@@ -262,13 +259,14 @@ public class PartitionSlicer
 
             int matchedReads = spanningGroupsMap.values().stream().mapToInt(x -> (int)x.reads().stream().filter(y -> y.written()).count()).sum();
 
-            SV_LOGGER.debug("region({}) readGroups({}) complete(local={} spanning={}) matchedReads({})",
-                    mRegion, totalGroups, totalGroups - spanningGroups, spanningGroups, matchedReads);
+            SV_LOGGER.debug("region({}) readGroups({}) complete(local={} spanning={}) expectedNotFound({}) matchedReads({})",
+                    mRegion, totalGroups, totalGroups - spanningGroups, spanningGroups, expectedGroups.size(), matchedReads);
 
             if(mConfig.WriteTypes.contains(BAM))
             {
                 mWriter.writeBamRecords(mJunctionTracker.junctionGroups());
                 mWriter.writeBamRecords(mJunctionTracker.supportingGroups());
+                mWriter.writeBamRecords(expectedGroups);
                 mWriter.writeBamRecords(recoveredReadGroups);
             }
 
@@ -276,6 +274,7 @@ public class PartitionSlicer
             {
                 mWriter.writeReadGroup(mJunctionTracker.junctionGroups());
                 mWriter.writeReadGroup(mJunctionTracker.supportingGroups());
+                mWriter.writeReadGroup(expectedGroups);
                 mWriter.writeReadGroup(recoveredReadGroups);
             }
         }
@@ -327,7 +326,7 @@ public class PartitionSlicer
         SV_LOGGER.trace("region({}) searching for {} missed reads", mRegion, missedReadCount);
 
         // ignore reads in blacklist locations
-        int skippedBlacklist = 0;
+        int blacklistCount = 0;
 
         // form 2 lists both order by missed read position
         Map<Integer,List<ExpectedRead>> positionReads = Maps.newHashMap();
@@ -339,13 +338,21 @@ public class PartitionSlicer
 
             for(ExpectedRead missedRead : entry.getValue())
             {
+                if(mFilterRegion != null)
+                {
+                    if(mFilterRegion.containsPosition(missedRead.Position) || mFilterRegion.containsPosition(missedRead.Position + mConfig.ReadLength))
+                        continue;
+                }
+
                 boolean inBlacklist = mConfig.Blacklist.inBlacklistLocation(
                         missedRead.Chromosome, missedRead.Position, missedRead.Position + mConfig.ReadLength);
 
                 if(inBlacklist)
                 {
-                    ++skippedBlacklist;
-                    continue;
+                    ++blacklistCount;
+
+                    if(!mConfig.RetrieveBlacklistMates)
+                        continue;
                 }
 
                 List<ExpectedRead> posReads = positionReads.get(missedRead.Position);
@@ -367,6 +374,7 @@ public class PartitionSlicer
             int position = entry.getKey();
             List<ExpectedRead> missedReads = entry.getValue();
             List<String> missedReadIds = positionReadIds.get(position);
+            int posMissedReadCount = missedReadIds.size();
 
             long startTime = System.nanoTime();
 
@@ -377,7 +385,7 @@ public class PartitionSlicer
             if(sliceTime > 2)
             {
                 SV_LOGGER.debug("slice time({}) for {} missed reads, location({}:{})",
-                        format("%.3f", sliceTime), missedReadIds.size(), mRegion.Chromosome, position);
+                        format("%.3f", sliceTime), posMissedReadCount, mRegion.Chromosome, position);
             }
         }
 
@@ -385,8 +393,8 @@ public class PartitionSlicer
 
         if(missedReadsMap.size() != readGroups.size())
         {
-            SV_LOGGER.debug("region({}) missed reads({}) recovered({}) blacklisted({})",
-                    mRegion, missedReadsMap.size(), readGroups.size(), skippedBlacklist);
+            SV_LOGGER.debug("region({}) missed reads({}) recovered({}) in-blacklist({})",
+                    mRegion, missedReadsMap.size(), readGroups.size(), blacklistCount);
         }
 
         return readGroups;

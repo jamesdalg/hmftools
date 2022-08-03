@@ -2,10 +2,7 @@ package com.hartwig.hmftools.svprep.reads;
 
 import static java.lang.String.format;
 
-import java.util.Set;
 import java.util.StringJoiner;
-
-import com.beust.jcommander.internal.Sets;
 
 public enum ReadFilterType
 {
@@ -13,7 +10,10 @@ public enum ReadFilterType
     MIN_MAP_QUAL(2, 1, "Min map quality"),
     INSERT_MAP_OVERLAP(4, 2,"Insert size vs aligned bases"),
     SOFT_CLIP_LENGTH(8, 3, "Soft-clip length"),
-    SOFT_CLIP_BASE_QUAL(16, 4,  "Soft-clip base qual");
+    SOFT_CLIP_BASE_QUAL(16, 4,  "Soft-clip insufficient high base qual"),
+    BREAK_IN_REPEAT(32, 5,  "Repeat break"),
+    POLY_G_SC(64, 6,  "Poly-G"),
+    SOFT_CLIP_LOW_BASE_QUAL(128, 6,  "Soft-clip excessive low base qual");
 
     private final int mFlag;
     private final int mIndex;
@@ -31,44 +31,25 @@ public enum ReadFilterType
         return mFlag;
     }
     public int index() { return mIndex; }
-
-    public boolean isSet(int flag) { return (mFlag & flag) != 0; }
-    public static boolean isSet(int flags, ReadFilterType flag) { return (flags & flag.flag()) != 0; }
-    public boolean isUnset(int flag) { return !isSet(flag); } // this.mFlags &= ~bit;
-
     public String description()
     {
         return mDescription;
     }
 
-    public static ReadFilterType valueOf(int flag)
+    public boolean isSet(int flag) { return (mFlag & flag) != 0; }
+    public static boolean isSet(int flags, ReadFilterType flag) { return (flags & flag.flag()) != 0; }
+    public boolean isUnset(int flag) { return !isSet(flag); } // this.mFlags &= ~bit;
+
+    public static int set(int flags, ReadFilterType flag)
     {
-        ReadFilterType[] allTypes = values();
-
-        for(int type = 0; type < allTypes.length; ++type)
-        {
-            ReadFilterType f = allTypes[type];
-
-            if(flag == f.mFlag)
-                return f;
-        }
-
-        return null;
+        flags |= flag.flag();
+        return flags;
     }
 
-    public static Set<ReadFilterType> getFlags(int flag)
+    public static int unset(int flags, ReadFilterType flag)
     {
-        Set<ReadFilterType> set = Sets.newHashSet();
-        ReadFilterType[] allValues = values();
-
-        for(int type = 0; type < allValues.length; ++type)
-        {
-            ReadFilterType f = allValues[type];
-            if(f.isSet(flag))
-                set.add(f);
-        }
-
-        return set;
+        flags &= ~flag.flag();
+        return flags;
     }
 
     public static String filterCountsToString(final int[] filterCounts)

@@ -21,11 +21,12 @@ import com.hartwig.hmftools.serve.cancertype.CancerTypeConstants;
 import com.hartwig.hmftools.serve.cancertype.ImmutableCancerType;
 import com.hartwig.hmftools.serve.sources.ckb.treatementapproach.ImmutableRelevantTreatmentApprochCurationEntryKey;
 import com.hartwig.hmftools.serve.sources.ckb.treatementapproach.RelevantTreatmentApprochCurationEntryKey;
-import com.hartwig.hmftools.serve.sources.ckb.treatementapproach.RelevantTreatmentAprroachCuration;
+import com.hartwig.hmftools.serve.sources.ckb.treatementapproach.RelevantTreatmentAproachCuration;
 import com.hartwig.hmftools.serve.treatment.ImmutableTreatment;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.util.Strings;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -69,10 +70,8 @@ class ActionableEntryFactory {
 
     @NotNull
     public static Set<ActionableEntry> toActionableEntries(@NotNull CkbEntry entry, @NotNull String sourceEvent,
-            @NotNull RelevantTreatmentAprroachCuration curator, @NotNull String gene, @NotNull EventType eventType) {
+            @NotNull RelevantTreatmentAproachCuration curator, @NotNull String gene, @NotNull EventType eventType) {
         Set<ActionableEntry> actionableEntries = Sets.newHashSet();
-        Set<String> sourceRelevantTreatmentApproaches = Sets.newHashSet();
-        Set<String> curatedRelevantTreatmentApproaches = Sets.newHashSet();
 
         for (Evidence evidence : evidencesWithUsableType(entry.evidences())) {
             EvidenceLevel level = resolveLevel(evidence.ampCapAscoEvidenceLevel());
@@ -116,6 +115,8 @@ class ActionableEntryFactory {
                     blacklistedCancerTypes.add(CancerTypeConstants.BONE_MARROW_TYPE);
                 }
 
+                Set<String> sourceRelevantTreatmentApproaches = Sets.newHashSet();
+                Set<String> curatedRelevantTreatmentApproaches = Sets.newHashSet();
                 for (RelevantTreatmentApproaches relevantTreatmentApproaches : evidence.relevantTreatmentApproaches()) {
                     DrugClass relevantTreatmentApproachesInfo = relevantTreatmentApproaches.drugClass();
 
@@ -124,11 +125,22 @@ class ActionableEntryFactory {
                     }
                 }
 
+                String treatmentApproachString = String.join(",", sourceRelevantTreatmentApproaches);
+                String treatmentApproachInterpret = Strings.EMPTY;
+                if (sourceRelevantTreatmentApproaches.isEmpty()) {
+                    treatmentApproachInterpret = null;
+                } else if (treatmentApproachString.substring(treatmentApproachString.length() - 1).equals(",")) {
+                    treatmentApproachInterpret = treatmentApproachString.substring(0, treatmentApproachString.length() - 1);
+                } else {
+                    treatmentApproachInterpret = treatmentApproachString;
+                }
+
                 RelevantTreatmentApprochCurationEntryKey key = ImmutableRelevantTreatmentApprochCurationEntryKey.builder()
                         .treatment(treatment)
-                        .treatmentApproach(String.join(",", sourceRelevantTreatmentApproaches))
-                        .event(gene + " " + eventType.name())
-                        .level(level)
+                        .treatmentApproach(treatmentApproachInterpret == null || treatmentApproachInterpret.isEmpty()
+                                ? null
+                                : treatmentApproachInterpret)
+                        .event(gene + " " + eventType)
                         .direction(direction)
                         .build();
 

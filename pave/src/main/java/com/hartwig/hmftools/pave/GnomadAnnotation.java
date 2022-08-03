@@ -200,7 +200,7 @@ public class GnomadAnnotation
         }
         catch(IOException e)
         {
-            PV_LOGGER.error("failed to find Gnoamd chromosome files in dir({}): {}", gnomadDir, e.toString());
+            PV_LOGGER.error("failed to find Gnomad chromosome files in dir({}): {}", gnomadDir, e.toString());
         }
     }
 

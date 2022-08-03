@@ -7,27 +7,19 @@ import static com.hartwig.hmftools.common.sv.StructuralVariantFactory.HOTSPOT;
 import static com.hartwig.hmftools.common.sv.StructuralVariantFactory.IHOMPOS;
 import static com.hartwig.hmftools.common.sv.StructuralVariantFactory.IMPRECISE;
 import static com.hartwig.hmftools.common.sv.StructuralVariantFactory.LOCAL_LINKED_BY;
-import static com.hartwig.hmftools.common.sv.StructuralVariantFactory.MATE_ID;
 import static com.hartwig.hmftools.common.sv.StructuralVariantFactory.PAR_ID;
 import static com.hartwig.hmftools.common.sv.StructuralVariantFactory.PON_COUNT;
+import static com.hartwig.hmftools.common.sv.StructuralVariantFactory.REFERENCE_BREAKEND_READPAIR_COVERAGE;
+import static com.hartwig.hmftools.common.sv.StructuralVariantFactory.REFERENCE_BREAKEND_READ_COVERAGE;
 import static com.hartwig.hmftools.common.sv.StructuralVariantFactory.REMOTE_LINKED_BY;
 import static com.hartwig.hmftools.common.sv.StructuralVariantFactory.TAF;
-import static com.hartwig.hmftools.common.utils.sv.SvCommonUtils.POS_ORIENT;
+import static com.hartwig.hmftools.common.sv.StructuralVariantFactory.VARIANT_FRAGMENT_BREAKEND_COVERAGE;
+import static com.hartwig.hmftools.common.sv.StructuralVariantFactory.VARIANT_FRAGMENT_BREAKPOINT_COVERAGE;
 import static com.hartwig.hmftools.gripss.GripssConfig.GR_LOGGER;
-import static com.hartwig.hmftools.gripss.filters.FilterConstants.LINE_POLY_AT_REQ;
-import static com.hartwig.hmftools.gripss.filters.FilterConstants.LINE_POLY_AT_TEST_LEN;
 
-import java.nio.file.FileVisitOption;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.List;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import com.google.common.collect.Lists;
-import com.hartwig.hmftools.gripss.common.GenotypeIds;
-import com.hartwig.hmftools.gripss.common.Interval;
 
 import htsjdk.variant.variantcontext.Genotype;
 import htsjdk.variant.variantcontext.VariantContext;
@@ -47,11 +39,12 @@ public class VcfUtils
 
     // read counts
     public static final String VT_SR = "SR";
-    public static final String VT_VF = "VF";
-    public static final String VT_BVF = "BVF";
+    public static final String VT_VF = VARIANT_FRAGMENT_BREAKPOINT_COVERAGE;
+    public static final String VT_BVF = VARIANT_FRAGMENT_BREAKEND_COVERAGE;
     public static final String VT_RP = "RP";
     public static final String VT_IC = "IC";
-    public static final String VT_REF = "REF";
+    public static final String VT_REF = REFERENCE_BREAKEND_READ_COVERAGE;
+    public static final String VT_REFPAIR = REFERENCE_BREAKEND_READPAIR_COVERAGE;
     public static final String VT_BUM = "BUM";
     public static final String VT_ASRP = "ASRP";
     public static final String VT_ASSR = "ASSR";
@@ -73,7 +66,6 @@ public class VcfUtils
     public static final String VT_EVENT = "EVENT";
     public static final String VT_SB = "SB";
     public static final String VT_BSC = "BSC";
-    public static final String VT_REFPAIR = "REFPAIR";
     public static final String VT_CIPOS = CIPOS;
     public static final String VT_CIRPOS = "CIRPOS";
     public static final String VT_IMPRECISE = IMPRECISE;
@@ -111,6 +103,12 @@ public class VcfUtils
                 vcfRefefenceId = vcfSampleNames.get(i);
                 referenceOrdinal = i;
             }
+        }
+
+        if(referenceOrdinal < 0 && tumorOrdinal == 1)
+        {
+            referenceOrdinal = 0;
+            vcfRefefenceId = vcfSampleNames.get(0);
         }
 
         if(tumorOrdinal < 0 || (!referenceId.isEmpty() && referenceOrdinal < 0))
@@ -180,36 +178,5 @@ public class VcfUtils
         }
 
         return assemblies;
-    }
-
-    public static boolean isMobileLineElement(final byte orientation, final String insertSequence)
-    {
-        int insSeqLength = insertSequence.length();
-        if(insSeqLength < LINE_POLY_AT_REQ)
-            return false;
-
-        final char polyATChar = orientation == POS_ORIENT ? 'T' : 'A';
-
-        int testLength = min(LINE_POLY_AT_TEST_LEN, insSeqLength);
-        int allowedNonRequiredChars = testLength - LINE_POLY_AT_REQ;
-
-        for(int i = 0; i < testLength; ++i)
-        {
-            if(orientation == POS_ORIENT)
-            {
-                if(insertSequence.charAt(i) != polyATChar)
-                    --allowedNonRequiredChars;
-            }
-            else
-            {
-                if(insertSequence.charAt(insSeqLength - i - 1) != polyATChar)
-                    --allowedNonRequiredChars;
-            }
-
-            if(allowedNonRequiredChars < 0)
-                return false;
-        }
-
-        return true;
     }
 }

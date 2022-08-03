@@ -4,13 +4,15 @@ import static com.hartwig.hmftools.common.test.MockRefGenome.generateRandomBases
 import static com.hartwig.hmftools.svprep.SvPrepTestUtils.BLACKLIST_LOCATIONS;
 import static com.hartwig.hmftools.svprep.SvPrepTestUtils.CHR_1;
 import static com.hartwig.hmftools.svprep.SvPrepTestUtils.HOTSPOT_CACHE;
-import static com.hartwig.hmftools.svprep.SvPrepTestUtils.READ_FILTERS;
 import static com.hartwig.hmftools.svprep.SvPrepTestUtils.createSamRecord;
 import static com.hartwig.hmftools.svprep.SvPrepTestUtils.readIdStr;
+import static com.hartwig.hmftools.svprep.reads.ReadFilters.isRepetitiveSectionBreak;
+import static com.hartwig.hmftools.svprep.reads.ReadRecord.hasPolyATSoftClip;
 import static com.hartwig.hmftools.svprep.reads.ReadType.CANDIDATE_SUPPORT;
 import static com.hartwig.hmftools.svprep.reads.ReadType.JUNCTION;
 
 import static junit.framework.TestCase.assertEquals;
+import static junit.framework.TestCase.assertFalse;
 import static junit.framework.TestCase.assertTrue;
 
 import com.hartwig.hmftools.common.utils.sv.BaseRegion;
@@ -31,7 +33,7 @@ public class JunctionsTest
     public JunctionsTest()
     {
         mPartitionRegion = new ChrBaseRegion(CHR_1, 1, 5000);
-        mJunctionTracker = new JunctionTracker(mPartitionRegion, READ_FILTERS, HOTSPOT_CACHE, BLACKLIST_LOCATIONS);
+        mJunctionTracker = new JunctionTracker(mPartitionRegion, new SvConfig(1000), HOTSPOT_CACHE, BLACKLIST_LOCATIONS);
     }
 
     private void addRead(final ReadRecord read, final ReadType readType)
@@ -97,7 +99,7 @@ public class JunctionsTest
                 readIdStr(readId), CHR_1, 1010, REF_BASES.substring(0, 50), "50M"));
 
         addRead(read7, JUNCTION);
-        addRead(read7, JUNCTION);
+        addRead(read8, JUNCTION);
 
         ReadRecord suppRead4 = ReadRecord.from(createSamRecord(
                 readIdStr(++readId), CHR_1, 990, REF_BASES.substring(0, 73), "70M3S"));
@@ -105,7 +107,7 @@ public class JunctionsTest
         // partitionBuckets.findBucket(readGroup1.minStartPosition()).addSupportingRead(suppRead4);
         addRead(suppRead4, CANDIDATE_SUPPORT);
 
-        mJunctionTracker.createJunctions();
+        mJunctionTracker.assignFragments();
 
         assertEquals(4, mJunctionTracker.junctions().size());
         assertEquals(1, mJunctionTracker.junctions().get(0).supportingFragmentCount());
@@ -131,6 +133,17 @@ public class JunctionsTest
 
         addRead(read2, JUNCTION);
 
+        // with supporting reads - first is too short as an indel
+        ReadRecord suppRead = ReadRecord.from(createSamRecord(
+                readIdStr(++readId), CHR_1, 100, REF_BASES.substring(0, 80), "20M20D20M"));
+
+        addRead(suppRead, CANDIDATE_SUPPORT);
+
+        suppRead = ReadRecord.from(createSamRecord(
+                readIdStr(++readId), CHR_1, 120, REF_BASES.substring(0, 80), "20M20D20M"));
+
+        addRead(suppRead, CANDIDATE_SUPPORT);
+
         // and a more complicated one
         // 5S10M2D10M3I10M35D10M2S from base 210: 10-19 match, 20-21 del, 22-31 match, ignore insert, 32-41 match, 42-76 del, 77-86 match
 
@@ -139,11 +152,13 @@ public class JunctionsTest
 
         addRead(read3, JUNCTION);
 
-        mJunctionTracker.createJunctions();
+        mJunctionTracker.assignFragments();
 
         assertEquals(4, mJunctionTracker.junctions().size());
         assertEquals(119, mJunctionTracker.junctions().get(0).Position);
         assertEquals(160, mJunctionTracker.junctions().get(1).Position);
+        assertEquals(1, mJunctionTracker.junctions().get(0).SupportingGroups.size());
+        assertEquals(1, mJunctionTracker.junctions().get(1).SupportingGroups.size());
 
         assertEquals(241, mJunctionTracker.junctions().get(2).Position);
         assertEquals(277, mJunctionTracker.junctions().get(3).Position);
@@ -173,7 +188,7 @@ public class JunctionsTest
 
         addRead(read3, JUNCTION);
 
-        mJunctionTracker.createJunctions();
+        mJunctionTracker.assignFragments();
 
         assertEquals(4, mJunctionTracker.junctions().size());
         assertEquals(119, mJunctionTracker.junctions().get(0).Position);
@@ -188,7 +203,7 @@ public class JunctionsTest
     {
         BLACKLIST_LOCATIONS.addRegion(CHR_1, new BaseRegion(500, 1500));
 
-        JunctionTracker junctionTracker = new JunctionTracker(mPartitionRegion, READ_FILTERS, HOTSPOT_CACHE, BLACKLIST_LOCATIONS);
+        JunctionTracker junctionTracker = new JunctionTracker(mPartitionRegion, new SvConfig(1000), HOTSPOT_CACHE, BLACKLIST_LOCATIONS);
 
         int readId = 0;
 
@@ -209,8 +224,65 @@ public class JunctionsTest
         suppRead1.setReadType(CANDIDATE_SUPPORT);
         junctionTracker.processRead(suppRead1);
 
-        junctionTracker.createJunctions();
+        junctionTracker.assignFragments();
 
         assertTrue(junctionTracker.junctions().isEmpty());
+    }
+
+    @Test
+    public void testRepetitiveBreaks()
+    {
+        String bases = generateRandomBases(30);
+
+        assertFalse(isRepetitiveSectionBreak(bases.getBytes(), true, 10));
+        assertFalse(isRepetitiveSectionBreak(bases.getBytes(), false, 10));
+
+        bases = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+        assertTrue(isRepetitiveSectionBreak(bases.getBytes(), true, 10));
+        assertTrue(isRepetitiveSectionBreak(bases.getBytes(), false, 10));
+
+        // 2-base repeats
+        bases = "ATATATATATATATATATATATATATATAT";
+
+        assertTrue(isRepetitiveSectionBreak(bases.getBytes(), true, 10));
+        assertTrue(isRepetitiveSectionBreak(bases.getBytes(), false, 10));
+
+        // with an error
+        bases = "ATATATAGATATATATATATAGATATATAT";
+
+        assertFalse(isRepetitiveSectionBreak(bases.getBytes(), true, 10));
+        assertFalse(isRepetitiveSectionBreak(bases.getBytes(), false, 10));
+
+        // 3-base repeats
+        bases = "ATCATCATCATCATCATCATCATCATCATCATC";
+
+        assertTrue(isRepetitiveSectionBreak(bases.getBytes(), true, 10));
+        assertTrue(isRepetitiveSectionBreak(bases.getBytes(), false, 10));
+
+        // with an error
+        bases = "ATCATCATGATCATCATCATCATCGTCATCATC";
+
+        assertFalse(isRepetitiveSectionBreak(bases.getBytes(), true, 10));
+        assertFalse(isRepetitiveSectionBreak(bases.getBytes(), false, 10));
+    }
+
+    @Test
+    public void testPolyATReads()
+    {
+        String aRepeat = "AAAAAAAAAACAAAAAAA";
+        String tRepeat = "TTTTTGTTTTTTTTTTTT";
+        String bases = aRepeat + generateRandomBases(30) + tRepeat;
+
+        ReadRecord read = ReadRecord.from(createSamRecord("01",  CHR_1, 100, bases, "18S30M18S"));
+        assertTrue(hasPolyATSoftClip(read, true));
+        assertTrue(hasPolyATSoftClip(read, false));
+
+        aRepeat = "AAAAACGAAACAAAAAAA";
+        tRepeat = "TTTTTGTTTTTAGTTTTT";
+        bases = aRepeat + generateRandomBases(30) + tRepeat;
+        read = ReadRecord.from(createSamRecord("01",  CHR_1, 100, bases, "18S30M18S"));
+        assertFalse(hasPolyATSoftClip(read, true));
+        assertFalse(hasPolyATSoftClip(read, false));
     }
 }

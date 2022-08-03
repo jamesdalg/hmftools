@@ -49,12 +49,10 @@ public class BaseQualityRegionCounter implements CigarHandler
 
     private static final CigarElement SINGLE = new CigarElement(1, CigarOperator.M);
     private static final byte N = (byte) 'N';
-    private static final int MAX_BASE_DATA_SIZE = 1000;
     private static final int BASE_DATA_POS_BUFFER = 100;
 
     public BaseQualityRegionCounter(
-            final SageConfig config, final SamReader bamReader, final ReferenceSequenceFile refGenome,
-            final BaseQualityResults results)
+            final SageConfig config, final SamReader bamReader, final ReferenceSequenceFile refGenome, final BaseQualityResults results)
     {
         mConfig = config;
         mBamReader = bamReader;
@@ -86,7 +84,7 @@ public class BaseQualityRegionCounter implements CigarHandler
             mIndexedBases = null;
         }
 
-        if(mBaseQualityData == null)
+        if(mBaseQualityData == null || mBaseQualityData.length != region.baseLength())
         {
             int regionPositionCount = region.baseLength();
             mBaseQualityData = new BaseQualityData[regionPositionCount];
@@ -97,14 +95,15 @@ public class BaseQualityRegionCounter implements CigarHandler
             {
                 mBaseQualityData[i] = null;
             }
-
-            mKeyCountsMap.clear();
-            mQualityCounts.clear();
-            mReadCounter = 0;
-            mPurgeIndex = 0;
-            mMaxIndex = 0;
-            mPerfCounter.reset();
         }
+
+        mKeyCountsMap.clear();
+        mQualityCounts.clear();
+        mReadCounter = 0;
+        mPurgeIndex = 0;
+        mMaxIndex = 0;
+
+        mPerfCounter.reset();
     }
 
     public Collection<QualityCounter> getQualityCounts() { return mQualityCounts; }
@@ -151,7 +150,8 @@ public class BaseQualityRegionCounter implements CigarHandler
         if(bqData.hasIndel())
             return;
 
-        Map<BaseQualityKey,Integer> keyCounts = bqData.formKeyCounts(mConfig.QualityRecalibration.MaxAltCount);
+        Map<BaseQualityKey,Integer> keyCounts = bqData.formKeyCounts(
+                mConfig.QualityRecalibration.MaxAltCount, mConfig.QualityRecalibration.MaxAltPerc);
 
         for(Map.Entry<BaseQualityKey,Integer> entry : keyCounts.entrySet())
         {

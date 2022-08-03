@@ -18,23 +18,27 @@ import com.hartwig.hmftools.common.utils.sv.ChrBaseRegion;
 import com.hartwig.hmftools.svprep.reads.PartitionStats;
 import com.hartwig.hmftools.svprep.reads.PartitionTask;
 import com.hartwig.hmftools.svprep.reads.PartitionThread;
+import com.hartwig.hmftools.svprep.reads.ReadFilterType;
 
 public class ChromosomeTask implements AutoCloseable
 {
     private final String mChromosome;
     private final SvConfig mConfig;
     private final CombinedReadGroups mCombinedReadGroups;
+    private final ExistingJunctionCache mExistingJunctionCache;
     private final ResultsWriter mWriter;
     private final Queue<PartitionTask> mPartitions;
 
     private final CombinedStats mCombinedStats;
 
     public ChromosomeTask(
-            final String chromosome, final SvConfig config, final CombinedReadGroups combinedReadGroups, final ResultsWriter writer)
+            final String chromosome, final SvConfig config, final CombinedReadGroups combinedReadGroups,
+            final ExistingJunctionCache existingJunctionCache, final ResultsWriter writer)
     {
         mChromosome = chromosome;
         mConfig = config;
         mCombinedReadGroups = combinedReadGroups;
+        mExistingJunctionCache = existingJunctionCache;
         mWriter = writer;
 
         mCombinedStats = new CombinedStats();
@@ -65,7 +69,7 @@ public class ChromosomeTask implements AutoCloseable
 
         for(int i = 0; i < min(mPartitions.size(), mConfig.Threads); ++i)
         {
-            workers.add(new PartitionThread(mChromosome, mConfig, mPartitions, mCombinedReadGroups, mWriter, mCombinedStats));
+            workers.add(new PartitionThread(mChromosome, mConfig, mPartitions, mCombinedReadGroups, mExistingJunctionCache, mWriter, mCombinedStats));
         }
 
         for(Thread worker : workers)
@@ -83,6 +87,9 @@ public class ChromosomeTask implements AutoCloseable
 
         SV_LOGGER.info("chromosome({}) {} regions complete, stats: {}",
                 mChromosome, regionCount, mCombinedStats.ReadStats.toString());
+
+        SV_LOGGER.debug("chromosome({}) filters({})",
+                mChromosome, ReadFilterType.filterCountsToString(mCombinedStats.ReadStats.ReadFilterCounts));
 
         if(mCombinedStats.ReadStats.TotalReads > 10000)
         {

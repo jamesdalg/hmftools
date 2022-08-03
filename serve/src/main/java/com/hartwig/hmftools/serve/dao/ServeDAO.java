@@ -19,6 +19,7 @@ import com.hartwig.hmftools.serve.cancertype.CancerTypeFactory;
 import com.hartwig.hmftools.serve.extraction.KnownEvents;
 import com.hartwig.hmftools.serve.extraction.codon.KnownCodon;
 import com.hartwig.hmftools.serve.extraction.copynumber.KnownCopyNumber;
+import com.hartwig.hmftools.serve.extraction.events.EventInterpretation;
 import com.hartwig.hmftools.serve.extraction.exon.KnownExon;
 import com.hartwig.hmftools.serve.extraction.fusion.KnownFusionPair;
 import com.hartwig.hmftools.serve.extraction.hotspot.KnownHotspot;
@@ -34,6 +35,7 @@ import static com.hartwig.hmftools.serve.database.tables.Knowncodon.KNOWNCODON;
 import static com.hartwig.hmftools.serve.database.tables.Knownexon.KNOWNEXON;
 import static com.hartwig.hmftools.serve.database.tables.Knowncopynumber.KNOWNCOPYNUMBER;
 import static com.hartwig.hmftools.serve.database.tables.Knownfusionpair.KNOWNFUSIONPAIR;
+import static com.hartwig.hmftools.serve.database.tables.Eventinterpretation.EVENTINTERPRETATION;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -46,6 +48,7 @@ import org.jooq.InsertValuesStep17;
 import org.jooq.InsertValuesStep19;
 import org.jooq.InsertValuesStep21;
 import org.jooq.InsertValuesStep4;
+import org.jooq.InsertValuesStep6;
 import org.jooq.InsertValuesStep8;
 import org.jooq.InsertValuesStep9;
 
@@ -73,9 +76,11 @@ public class ServeDAO {
         context.deleteFrom(KNOWNEXON).execute();
         context.deleteFrom(KNOWNFUSIONPAIR).execute();
         context.deleteFrom(KNOWNCOPYNUMBER).execute();
+        context.deleteFrom(EVENTINTERPRETATION).execute();
     }
 
-    void write(@NotNull ActionableEvents actionableEvents, KnownEvents knownEvents) {
+    void write(@NotNull ActionableEvents actionableEvents, @NotNull KnownEvents knownEvents,
+            @NotNull List<EventInterpretation> eventInterpretations) {
 
         deleteAll();
 
@@ -296,6 +301,18 @@ public class ServeDAO {
                     KNOWNCOPYNUMBER.TYPE,
                     KNOWNCOPYNUMBER.SOURCES);
             batch.forEach(entry -> addRecordKnownCopyNumbers(timestamp, inserter, entry));
+            inserter.execute();
+        }
+
+        for (List<EventInterpretation> batch: Iterables.partition(eventInterpretations, Utils.DB_BATCH_INSERT_SIZE)) {
+            InsertValuesStep6 inserter = context.insertInto(EVENTINTERPRETATION,
+                    EVENTINTERPRETATION.MODIFIED,
+                    EVENTINTERPRETATION.SOURCE,
+                    EVENTINTERPRETATION.SOURCEEVENT,
+                    EVENTINTERPRETATION.INTERPRETEDGENE,
+                    EVENTINTERPRETATION.INTERPRETEDEVENT,
+                    EVENTINTERPRETATION.INTERPRETEDEVENTTYPE);
+            batch.forEach(entry -> addRecordEventInterpretations(timestamp, inserter, entry));
             inserter.execute();
         }
     }
@@ -545,5 +562,15 @@ public class ServeDAO {
                 knownCopyNumber.gene(),
                 knownCopyNumber.type(),
                 Knowledgebase.toCommaSeparatedSourceString(knownCopyNumber.sources()));
+    }
+
+    private static void addRecordEventInterpretations(@NotNull Timestamp timestamp, @NotNull InsertValuesStep6 inserter,
+            @NotNull EventInterpretation eventInterpretation) {
+        inserter.values(timestamp,
+                eventInterpretation.source(),
+                eventInterpretation.sourceEvent(),
+                eventInterpretation.interpretedGene(),
+                eventInterpretation.interpretedEvent(),
+                eventInterpretation.interpretedEventType());
     }
 }

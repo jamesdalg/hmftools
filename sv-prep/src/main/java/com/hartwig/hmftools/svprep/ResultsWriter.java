@@ -1,15 +1,21 @@
 package com.hartwig.hmftools.svprep;
 
+import static java.lang.Math.max;
 import static java.lang.Math.min;
 import static java.lang.String.format;
 
 import static com.hartwig.hmftools.common.utils.FileWriterUtils.closeBufferedWriter;
 import static com.hartwig.hmftools.common.utils.FileWriterUtils.createBufferedWriter;
+import static com.hartwig.hmftools.common.utils.sv.SvCommonUtils.NEG_ORIENT;
 import static com.hartwig.hmftools.svprep.SvCommon.ITEM_DELIM;
 import static com.hartwig.hmftools.svprep.SvCommon.SV_LOGGER;
 import static com.hartwig.hmftools.svprep.WriteType.JUNCTIONS;
 import static com.hartwig.hmftools.svprep.WriteType.READS;
 import static com.hartwig.hmftools.svprep.WriteType.SV_BED;
+import static com.hartwig.hmftools.svprep.reads.ReadFilterType.MIN_MAP_QUAL;
+import static com.hartwig.hmftools.svprep.reads.ReadFilterType.POLY_G_SC;
+import static com.hartwig.hmftools.svprep.reads.ReadFilterType.SOFT_CLIP_LOW_BASE_QUAL;
+import static com.hartwig.hmftools.svprep.reads.ReadRecord.hasPolyATSoftClip;
 
 import static htsjdk.samtools.SAMFlag.MATE_UNMAPPED;
 import static htsjdk.samtools.SAMFlag.PROPER_PAIR;
@@ -81,7 +87,7 @@ public class ResultsWriter
             BufferedWriter writer = createBufferedWriter(filename, false);
 
             writer.write("ReadId,GroupCount,ExpectedCount,GroupStatus,HasExternal,ReadType,Chromosome,PosStart,PosEnd,Cigar");
-            writer.write(",FragLength,MateChr,MatePosStart,MapQual,SuppData,Flags");
+            writer.write(",FragLength,MateChr,MatePosStart,MapQual,SuppData,Flags,Filters");
             writer.write(",FirstInPair,ReadReversed,Proper,Unmapped,MateUnmapped,Supplementary,JunctionPositions");
 
             writer.newLine();
@@ -137,9 +143,9 @@ public class ResultsWriter
 
             SupplementaryReadData suppData = read.supplementaryAlignment();
 
-            mReadWriter.write(format(",%d,%s,%d,%d,%s,%d",
+            mReadWriter.write(format(",%d,%s,%d,%d,%s,%d,%d",
                     read.fragmentInsertSize(), read.MateChromosome, read.MatePosStart, read.mapQuality(),
-                    suppData != null ? suppData.asCsv() : "N/A", read.flags()));
+                    suppData != null ? suppData.asCsv() : "N/A", read.flags(), read.filters()));
 
             mReadWriter.write(format(",%s,%s,%s,%s,%s,%s",
                     read.isFirstOfPair(), read.isReadReversed(), read.hasFlag(PROPER_PAIR), read.hasFlag(READ_UNMAPPED),
@@ -165,8 +171,8 @@ public class ResultsWriter
             String filename = mConfig.formFilename(JUNCTIONS);
             BufferedWriter writer = createBufferedWriter(filename, false);
 
-            writer.write("Chromosome,Position,Orientation,JunctionFrags,SupportFrags,DiscordantFrags,LowMapQualFrags,Hotspot,InitialReadId");
-            writer.write(",RemoteJunctionCount,RemoteJunctions");
+            writer.write("Chromosome,Position,Orientation,JunctionFrags,SupportFrags,DiscordantFrags,LowMapQualFrags,MaxQual");
+            writer.write(",MaxSoftClip,BaseDepth,HasPolyAT,Indel,Hotspot,SoftClipBases,InitialReadId,RemoteJunctionCount,RemoteJunctions");
             writer.newLine();
 
             return writer;
@@ -188,17 +194,78 @@ public class ResultsWriter
         {
             for(JunctionData junctionData : junctions)
             {
-                int lowMapQualFrags = (int)junctionData.JunctionGroups.stream()
-                        .filter(x -> x.reads().stream().anyMatch(y -> y.filters() == ReadFilterType.MIN_MAP_QUAL.flag())).count();
+                int maxMapQual = 0;
+                int lowMapQualFrags = 0;
+                int maxSoftClip = 0;
+                String softClipBases = "";
+                boolean hasPloyAT = false;
+                boolean expectLeftClipped = junctionData.Orientation == NEG_ORIENT;
 
-                int exactSupportFrags = (int)junctionData.SupportingGroups.stream()
-                        .filter(x -> x.reads().stream().anyMatch(y -> y.readType() == ReadType.EXACT_SUPPORT)).count();
+                for(ReadGroup readGroup : junctionData.JunctionGroups)
+                {
+                    for(ReadRecord read : readGroup.reads())
+                    {
+                        if(read.readType() != ReadType.JUNCTION)
+                            continue;
 
-                int discordantFrags = junctionData.SupportingGroups.size() - exactSupportFrags;
+                        // check the read supports this junction (it can only support another junction)
+                        boolean supportsJuncction =
+                                (expectLeftClipped && read.start() == junctionData.Position && read.cigar().isLeftClipped())
+                                || (!expectLeftClipped && read.end() == junctionData.Position && read.cigar().isRightClipped());
 
-                mJunctionWriter.write(format("%s,%d,%d,%d,%d,%d,%d,%s,%s",
+                        if(!supportsJuncction)
+                            continue;
+
+                        if(ReadFilterType.isSet(read.filters(), MIN_MAP_QUAL))
+                            ++lowMapQualFrags;
+
+                        maxMapQual = max(maxMapQual, read.mapQuality());
+
+                        if(!junctionData.internalIndel())
+                        {
+                            if(!hasPloyAT)
+                                hasPloyAT = hasPolyATSoftClip(read, expectLeftClipped);
+
+                            int scLength = expectLeftClipped ?
+                                    read.cigar().getFirstCigarElement().getLength() : read.cigar().getLastCigarElement().getLength();
+
+                            if(scLength > maxSoftClip)
+                            {
+                                maxSoftClip = scLength;
+                                softClipBases = ReadRecord.getSoftClippedBases(read.record(), expectLeftClipped);
+                            }
+                        }
+                    }
+                }
+
+                int exactSupportFrags = 0;
+                int discordantFrags = 0;
+                for(ReadGroup readGroup : junctionData.SupportingGroups)
+                {
+                    for(ReadRecord read : readGroup.reads())
+                    {
+                        if(read.readType() == ReadType.EXACT_SUPPORT)
+                        {
+                            ++exactSupportFrags;
+                            maxMapQual = max(maxMapQual, read.mapQuality());
+
+                            if(ReadFilterType.isSet(read.filters(), MIN_MAP_QUAL))
+                                ++lowMapQualFrags;
+                        }
+                        else
+                        {
+                            ++discordantFrags;
+                        }
+                    }
+                }
+
+                mJunctionWriter.write(format("%s,%d,%d,%d,%d,%d,%d,%d",
                         chromosome, junctionData.Position, junctionData.Orientation, junctionData.junctionFragmentCount(),
-                        exactSupportFrags, discordantFrags, lowMapQualFrags, junctionData.hotspot(), junctionData.InitialRead.id()));
+                        exactSupportFrags, discordantFrags, lowMapQualFrags, maxMapQual));
+
+                mJunctionWriter.write(format(",%d,%d,%s,%s,%s,%s,%s",
+                        maxSoftClip, junctionData.depth(), hasPloyAT, junctionData.internalIndel(), junctionData.hotspot(),
+                        softClipBases, junctionData.InitialRead != null ? junctionData.InitialRead.id() : "EXISTING"));
 
                 // RemoteChromosome:RemotePosition:RemoteOrientation;Fragments then separated by ';'
                 String remoteJunctionsStr = "";
@@ -234,10 +301,31 @@ public class ResultsWriter
         if(mBamWriter == null)
             return;
 
+        // note additional filters for a read to be written to the BAM
+        // - excessive low qual soft-clip bases
+        // - above the poly-G(C) threshold
+
         for(ReadGroup readGroup : readGroups)
         {
-            readGroup.reads().stream().filter(x -> !x.written()).forEach(x -> mBamWriter.writeRecord(x.record()));
+            readGroup.reads().stream().filter(x -> !filterBamRecord(x)).forEach(x -> mBamWriter.writeRecord(x.record()));
         }
+    }
+
+    private boolean filterBamRecord(final ReadRecord read)
+    {
+        if(read.written())
+            return true;
+
+        if(ReadFilterType.isSet(read.filters(), POLY_G_SC))
+            return true;
+
+        if(ReadFilterType.isSet(read.filters(), SOFT_CLIP_LOW_BASE_QUAL))
+        {
+            if(read.readType() != ReadType.JUNCTION && read.readType() != ReadType.EXACT_SUPPORT)
+                return true;
+        }
+
+        return false;
     }
 
     private BufferedWriter initialiseBedWriter()

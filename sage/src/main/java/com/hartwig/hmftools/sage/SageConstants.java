@@ -18,6 +18,7 @@ public class SageConstants
     public static final boolean DEFAULT_MNV = true;
 
     // base quality recalibration
+    public static final double DEFAULT_BQR_MAX_ALT_PERC = 0.1;
     public static final int DEFAULT_BQR_MAX_ALT_COUNT = 3;
     public static final int DEFAULT_BQR_SAMPLE_SIZE = 2_000_000;
     public static final int DEFAULT_BQR_MIN_MAP_QUAL = 10;
@@ -48,6 +49,8 @@ public class SageConstants
     public static final double HOTSPOT_MIN_TUMOR_VAF_SKIP_QUAL = 0.08;
     public static final int HOTSPOT_MIN_TUMOR_ALT_SUPPORT_SKIP_QUAL = 8;
     public static final int HOTSPOT_MIN_RAW_ALT_BASE_QUAL = 150;
+
+    public static final int MIN_AVG_BASE_QUALITY = 22;
 
     public static final SoftFilterConfig DEFAULT_HOTSPOT_FILTER = new SoftFilterConfig(70, 0.005,
             0, 0, 0, 0,

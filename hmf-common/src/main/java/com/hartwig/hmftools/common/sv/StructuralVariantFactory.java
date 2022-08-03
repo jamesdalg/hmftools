@@ -59,10 +59,10 @@ public class StructuralVariantFactory
     private static final String BPI_AF = "BPI_AF";
     private static final String SOMATIC_SCORE = "SOMATICSCORE"; // only applicable for Manta and will be removed when fully on GRIDSS
     public static final String IHOMPOS = "IHOMPOS";
-    private static final String VARIANT_FRAGMENT_BREAKPOINT_COVERAGE = "VF";
-    private static final String VARIANT_FRAGMENT_BREAKEND_COVERAGE = "BVF";
-    private static final String REFERENCE_BREAKEND_READ_COVERAGE = "REF";
-    private static final String REFERENCE_BREAKEND_READPAIR_COVERAGE = "REFPAIR";
+    public static final String VARIANT_FRAGMENT_BREAKPOINT_COVERAGE = "VF";
+    public static final String VARIANT_FRAGMENT_BREAKEND_COVERAGE = "BVF";
+    public static final String REFERENCE_BREAKEND_READ_COVERAGE = "REF";
+    public static final String REFERENCE_BREAKEND_READPAIR_COVERAGE = "REFPAIR";
     private static final String EVENT = "EVENT";
 
     public static final String UNTEMPLATED_SEQUENCE_ALIGNMENTS = "BEALN";
@@ -120,8 +120,6 @@ public class StructuralVariantFactory
             final StructuralVariantType type = type(context);
             if(type.equals(BND))
             {
-                // final boolean isSingleBreakend = SINGLE_BREAKEND_REGEX.matcher(context.getAlternateAllele(0).getDisplayString()).matches();
-
                 if(isSingleBreakend(context))
                 {
                     mCompleteVariants.add(createSingleBreakend(context));
