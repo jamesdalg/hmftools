@@ -1,3 +1,4 @@
+USE patientdb;
 SET FOREIGN_KEY_CHECKS = 0;
 
 DROP TABLE IF EXISTS patient;
@@ -958,8 +959,8 @@ CREATE TABLE svBreakend
     sampleId varchar(50) NOT NULL,
     svId INT NOT NULL,
     startBreakend BOOLEAN NOT NULL,
-    gene VARCHAR(50) NOT NULL, # length here comes from ensembl db schema
-    transcriptId VARCHAR(128) NOT NULL, # length here comes from ensembl db schema
+    gene VARCHAR(50) NOT NULL, 
+    transcriptId VARCHAR(128) NOT NULL, 
     canonicalTranscript BOOLEAN NOT NULL,
     geneOrientation VARCHAR(20) NOT NULL,
     disruptive BOOLEAN NOT NULL,
