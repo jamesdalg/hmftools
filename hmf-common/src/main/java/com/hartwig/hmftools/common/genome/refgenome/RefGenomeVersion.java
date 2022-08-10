@@ -7,16 +7,13 @@ import org.jetbrains.annotations.NotNull;
 public enum RefGenomeVersion
 {
     V37("37", true),
-<<<<<<< HEAD
+
     V38("38", false);
-=======
+
     V38("38", false),
     HG19("37", true), // included to distinguish from GRCh37 since has has the 'chr' prefix
     CHM13("13", false);
-<<<<<<< HEAD
->>>>>>> added new lengths and centromeres
-=======
->>>>>>> cbb48ff99c89b466fd7265560ab82c9eea33e5bd
+
 
     @NotNull
     private final String mIdentifier;
@@ -32,23 +29,17 @@ public enum RefGenomeVersion
     @NotNull
     public static RefGenomeVersion from(@NotNull final String version)
     {
-<<<<<<< HEAD
-<<<<<<< HEAD
         if(version.equals(V37.toString()) || version.equals("37") || version.equals("HG37"))
-=======
         if (version.equals(CHM13.toString()) || version.equals("RG_13") || version.equals("13") || version.equals("CHM13"))
-=======
         if (version.equals(CHM13.toString()) || version.equals("RG_13") || version.equals("13") || version.equals("CHM13"))
         {
             return CHM13;
         }
         else if (version.equals(V37.toString()) || version.equals("RG_37") || version.equals("37") || version.equals("HG37"))
->>>>>>> cbb48ff99c89b466fd7265560ab82c9eea33e5bd
         {
             return CHM13;
         }
         else if (version.equals(V37.toString()) || version.equals("RG_37") || version.equals("37") || version.equals("HG37"))
->>>>>>> added new lengths and centromeres
         {
             return V37;
         }
@@ -75,15 +66,9 @@ public enum RefGenomeVersion
     @NotNull
     public String versionedChromosome(@NotNull String chromosome)
     {
-<<<<<<< HEAD
-<<<<<<< HEAD
         if(this == V38)
-=======
         if (this == V38 || this == HG19 || this == CHM13)
->>>>>>> added new lengths and centromeres
-=======
         if (this == V38 || this == HG19 || this == CHM13)
->>>>>>> cbb48ff99c89b466fd7265560ab82c9eea33e5bd
         {
             return RefGenomeFunctions.enforceChrPrefix(chromosome);
         }
