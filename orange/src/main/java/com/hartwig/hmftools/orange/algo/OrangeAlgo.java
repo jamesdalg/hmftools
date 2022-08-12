@@ -11,8 +11,8 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
-import com.hartwig.hmftools.common.chord.ChordAnalysis;
-import com.hartwig.hmftools.common.chord.ChordDataLoader;
+import com.hartwig.hmftools.common.chord.ChordData;
+import com.hartwig.hmftools.common.chord.ChordDataFile;
 import com.hartwig.hmftools.common.cuppa.CuppaDataFile;
 import com.hartwig.hmftools.common.doid.DiseaseOntology;
 import com.hartwig.hmftools.common.doid.DoidEntry;
@@ -24,8 +24,7 @@ import com.hartwig.hmftools.common.flagstat.Flagstat;
 import com.hartwig.hmftools.common.flagstat.FlagstatFile;
 import com.hartwig.hmftools.common.fusion.KnownFusionCache;
 import com.hartwig.hmftools.common.isofox.IsofoxDataLoader;
-import com.hartwig.hmftools.common.lilac.LilacData;
-import com.hartwig.hmftools.common.lilac.LilacDataLoader;
+import com.hartwig.hmftools.common.hla.LilacSummaryData;
 import com.hartwig.hmftools.common.linx.LinxData;
 import com.hartwig.hmftools.common.linx.LinxDataLoader;
 import com.hartwig.hmftools.common.metrics.WGSMetrics;
@@ -138,7 +137,7 @@ public class OrangeAlgo {
 
         LinxInterpretedData linx = LinxInterpreter.interpret(loadLinxData(config), allEvidences, driverGenes, knownFusionCache);
 
-        ChordAnalysis chord = loadChordAnalysis(config);
+        ChordData chord = loadChordAnalysis(config);
         PurpleInterpretedData purple = PurpleInterpreter.interpret(loadPurpleData(config), allEvidences, driverGenes, chord);
 
         List<WildTypeGene> wildTypeGenes = WildTypeFactory.filterQCWildTypes(purple.fit().qc().status(),
@@ -300,8 +299,8 @@ public class OrangeAlgo {
     }
 
     @NotNull
-    private static LilacData loadLilacData(@NotNull OrangeConfig config) throws IOException {
-        return LilacDataLoader.load(config.lilacQcCsv(), config.lilacResultCsv());
+    private static LilacSummaryData loadLilacData(@NotNull OrangeConfig config) throws IOException {
+        return LilacSummaryData.load(config.lilacQcCsv(), config.lilacResultCsv());
     }
 
     @NotNull
@@ -310,8 +309,8 @@ public class OrangeAlgo {
     }
 
     @NotNull
-    private static ChordAnalysis loadChordAnalysis(@NotNull OrangeConfig config) throws IOException {
-        return ChordDataLoader.load(config.chordPredictionTxt());
+    private static ChordData loadChordAnalysis(@NotNull OrangeConfig config) throws IOException {
+        return ChordDataFile.read(config.chordPredictionTxt(), true);
     }
 
     @NotNull

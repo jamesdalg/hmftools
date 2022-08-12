@@ -11,7 +11,7 @@ import com.hartwig.hmftools.common.amber.AmberAnonymous;
 import com.hartwig.hmftools.common.amber.AmberMapping;
 import com.hartwig.hmftools.common.amber.AmberPatient;
 import com.hartwig.hmftools.common.amber.AmberSample;
-import com.hartwig.hmftools.common.chord.ChordAnalysis;
+import com.hartwig.hmftools.common.chord.ChordData;
 import com.hartwig.hmftools.common.cuppa.MolecularTissueOrginData;
 import com.hartwig.hmftools.common.drivercatalog.DriverCatalog;
 import com.hartwig.hmftools.common.drivercatalog.DriverType;
@@ -21,8 +21,6 @@ import com.hartwig.hmftools.common.drivercatalog.panel.DriverGene;
 import com.hartwig.hmftools.common.flagstat.Flagstat;
 import com.hartwig.hmftools.common.gene.GeneData;
 import com.hartwig.hmftools.common.gene.TranscriptData;
-import com.hartwig.hmftools.common.hla.HlaType;
-import com.hartwig.hmftools.common.hla.HlaTypeDetails;
 import com.hartwig.hmftools.common.metrics.WGSMetricWithQC;
 import com.hartwig.hmftools.common.peach.PeachCalls;
 import com.hartwig.hmftools.common.peach.PeachGenotype;
@@ -480,20 +478,22 @@ public class DatabaseAccess implements AutoCloseable {
         protectDAO.write(sample, evidence);
     }
 
-    public void writeChord(@NotNull String sample, @NotNull ChordAnalysis chordAnalysis) {
-        chordDAO.writeChord(sample, chordAnalysis);
+    public void writeChord(@NotNull String sample, @NotNull ChordData chordData) {
+        chordDAO.writeChord(sample, chordData);
     }
 
-    public ChordAnalysis readChord(final String sampleId) { return chordDAO.readChord(sampleId); }
+    public ChordData readChord(final String sampleId) { return chordDAO.readChord(sampleId); }
 
     public void writeSnpCheck(@NotNull String sample, boolean isPass) {
         snpCheckDAO.write(sample, isPass);
     }
 
-    public void writeHla(@NotNull final String sample, @NotNull final HlaType type, @NotNull final List<HlaTypeDetails> details) {
+    /*
+    public void writeHla(@NotNull final String sample, @NotNull final HlaTypes type, @NotNull final List<HlaTypeDetails> details) {
         hlaTypeDAO.writeType(sample, type);
         hlaTypeDAO.writeTypeDetails(sample, details);
     }
+    */
 
     public void clearCpctEcrf() {
         ecrfDAO.clearCpct();
@@ -589,8 +589,8 @@ public class DatabaseAccess implements AutoCloseable {
         LOGGER.info("Deleting PEACH data for sample: {}", sample);
         peachDAO.deletePeachForSample(sample);
 
-        LOGGER.info("Deleting HLA data for sample: {}", sample);
-        hlaTypeDAO.deleteHlaFprSample(sample);
+        // LOGGER.info("Deleting HLA data for sample: {}", sample);
+        hlaTypeDAO.deleteSampleData(sample);
 
         LOGGER.info("Deleting virus breakend data for sample: {}", sample);
         virusBreakendDAO.deleteVirusBreakendForSample(sample);
