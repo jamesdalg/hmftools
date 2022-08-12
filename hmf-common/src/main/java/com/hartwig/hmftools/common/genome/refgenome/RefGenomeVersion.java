@@ -58,9 +58,7 @@ public enum RefGenomeVersion
     @NotNull
     public String versionedChromosome(@NotNull String chromosome)
     {
-        if(this == V38)
-        if (this == V38 || this == HG19 || this == CHM13)
-        if (this == V38 || this == HG19 || this == CHM13)
+        if (this == V38  || this == CHM13)
         {
             return RefGenomeFunctions.enforceChrPrefix(chromosome);
         }
