@@ -6,9 +6,6 @@ import org.jetbrains.annotations.NotNull;
 
 public enum RefGenomeVersion
 {
-    V37("37", true),
-
-    V38("38", false);
 
     V38("38", false),
     HG19("37", true), // included to distinguish from GRCh37 since has has the 'chr' prefix
@@ -29,13 +26,8 @@ public enum RefGenomeVersion
     @NotNull
     public static RefGenomeVersion from(@NotNull final String version)
     {
-        if(version.equals(V37.toString()) || version.equals("37") || version.equals("HG37"))
+
         if (version.equals(CHM13.toString()) || version.equals("RG_13") || version.equals("13") || version.equals("CHM13"))
-        if (version.equals(CHM13.toString()) || version.equals("RG_13") || version.equals("13") || version.equals("CHM13"))
-        {
-            return CHM13;
-        }
-        else if (version.equals(V37.toString()) || version.equals("RG_37") || version.equals("37") || version.equals("HG37"))
         {
             return CHM13;
         }
